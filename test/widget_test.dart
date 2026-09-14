@@ -1,22 +1,80 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:liftlog/data/models/exercise.dart';
+import 'package:liftlog/data/models/personal_record.dart';
+import 'package:liftlog/data/models/workout_session.dart';
+import 'package:liftlog/features/shell/main_shell.dart';
 import 'package:liftlog/main.dart';
+import 'package:liftlog/providers/app_providers.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  testWidgets('renders the workout dashboard', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
-
-    expect(find.text("TODAY'S PLAN"), findsOneWidget);
-    expect(find.text('Push Day'), findsOneWidget);
-    expect(find.text('Start workout'), findsOneWidget);
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
   });
+
+  testWidgets('renders SplashScreen with branding and get started button', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: WorkoutLogApp(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Workout Log'), findsOneWidget);
+    expect(find.text('Build Better Habits\nTrack Your Progress'), findsOneWidget);
+    expect(find.text('Get Started'), findsOneWidget);
+  });
+
+  testWidgets('renders MainShell and verifies dynamic empty states without fake data', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          todayPlanProvider.overrideWith((ref) => Future.value(null)),
+          completedSessionsProvider.overrideWith(() => _MockEmptySessionsNotifier()),
+          allPrsProvider.overrideWith(() => _MockEmptyPrsNotifier()),
+          exercisesProvider.overrideWith(() => _MockEmptyExercisesNotifier()),
+        ],
+        child: const MaterialApp(
+          home: MainShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Verify empty state is displayed when database has no workouts
+    expect(find.text('No workout scheduled for today'), findsOneWidget);
+    expect(find.text('Create Workout Plan'), findsOneWidget);
+    expect(find.text('Current Streak'), findsOneWidget);
+    expect(find.text('Recent Progress'), findsOneWidget);
+
+    // Verify bottom navigation items exist
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Workouts'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('Progress'), findsOneWidget);
+    expect(find.text('Reports'), findsOneWidget);
+  });
+}
+
+class _MockEmptySessionsNotifier extends CompletedSessionsNotifier {
+  @override
+  Future<List<WorkoutSession>> build() async => [];
+}
+
+class _MockEmptyPrsNotifier extends AllPrsNotifier {
+  @override
+  Future<List<PersonalRecord>> build() async => [];
+}
+
+class _MockEmptyExercisesNotifier extends ExercisesNotifier {
+  @override
+  Future<List<Exercise>> build() async => [];
 }
