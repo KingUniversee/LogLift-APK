@@ -117,7 +117,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Start your fitness journey with MongoDB sync',
+                      'Start your fitness journey and track your progress',
                       style: TextStyle(
                         fontSize: 15,
                         color: AppColors.textSecondary,

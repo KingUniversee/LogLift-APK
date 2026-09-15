@@ -1,46 +1,57 @@
-import 'package:mongo_dart/mongo_dart.dart';
-import '../database/mongo_database.dart';
+import '../../core/network/api_client.dart';
 import '../models/personal_record.dart';
 
 class PersonalRecordRepository {
-  PersonalRecordRepository([MongoDatabase? db]) : _db = db ?? MongoDatabase.instance;
-  final MongoDatabase _db;
+  PersonalRecordRepository([ApiClient? api]) : _api = api ?? ApiClient.instance;
+  final ApiClient _api;
 
   Future<List<PersonalRecord>> getAllPRs() async {
-    final collection = await _db.prsCollection;
-    final docs = await collection.find(where.sortBy('achieved_at', descending: true)).toList();
-    return docs.map((d) => PersonalRecord.fromMap(d)).toList();
+    final response = await _api.get('/personal-records');
+    if (response is List) {
+      return response
+          .map((d) => PersonalRecord.fromMap(Map<String, dynamic>.from(d as Map)))
+          .toList();
+    }
+    return [];
   }
 
   Future<List<PersonalRecord>> getPRsForExercise(String exerciseId) async {
-    final collection = await _db.prsCollection;
-    final docs = await collection.find(
-      where.eq('exercise_id', exerciseId).sortBy('achieved_at', descending: true),
-    ).toList();
-    return docs.map((d) => PersonalRecord.fromMap(d)).toList();
+    final response = await _api.get(
+      '/personal-records',
+      queryParams: {'exerciseId': exerciseId},
+    );
+    if (response is List) {
+      return response
+          .map((d) => PersonalRecord.fromMap(Map<String, dynamic>.from(d as Map)))
+          .toList();
+    }
+    return [];
   }
 
   Future<PersonalRecord?> getBestRecord(String exerciseId, PRType recordType) async {
-    final collection = await _db.prsCollection;
-    final doc = await collection.findOne(
-      where.eq('exercise_id', exerciseId).eq('record_type', recordType.name).sortBy('value', descending: true),
-    );
-    if (doc == null) return null;
-    return PersonalRecord.fromMap(doc);
+    try {
+      final response = await _api.get(
+        '/personal-records',
+        queryParams: {
+          'exerciseId': exerciseId,
+          'recordType': recordType.name,
+          'best': 'true',
+        },
+      );
+      if (response is Map<String, dynamic>) {
+        return PersonalRecord.fromMap(response);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> savePR(PersonalRecord pr) async {
-    final collection = await _db.prsCollection;
-    final doc = pr.toMap()..['_id'] = pr.id;
-    await collection.replaceOne(
-      where.eq('id', pr.id),
-      doc,
-      upsert: true,
-    );
+    await _api.post('/personal-records', body: pr.toMap());
   }
 
   Future<void> deletePRsForSession(String sessionId) async {
-    final collection = await _db.prsCollection;
-    await collection.deleteMany(where.eq('session_id', sessionId));
+    await _api.delete('/personal-records/session/$sessionId');
   }
 }

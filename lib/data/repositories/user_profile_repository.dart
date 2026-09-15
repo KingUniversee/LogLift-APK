@@ -1,14 +1,13 @@
-import 'package:mongo_dart/mongo_dart.dart';
-import '../database/mongo_database.dart';
+import '../../core/network/api_client.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 
 class UserProfileRepository {
-  UserProfileRepository([MongoDatabase? db, AuthService? authService])
-      : _db = db ?? MongoDatabase.instance,
+  UserProfileRepository([ApiClient? api, AuthService? authService])
+      : _api = api ?? ApiClient.instance,
         _authService = authService ?? AuthService();
 
-  final MongoDatabase _db;
+  final ApiClient _api;
   final AuthService _authService;
 
   Future<UserProfile?> getProfile() async {
@@ -16,11 +15,13 @@ class UserProfileRepository {
   }
 
   Future<void> saveProfile(UserProfile profile) async {
-    final users = await _db.usersCollection;
-    await users.replaceOne(
-      where.eq('id', profile.id),
-      profile.toMap()..['_id'] = profile.id,
-      upsert: true,
+    await _api.put(
+      '/users/profile',
+      body: {
+        'name': profile.name,
+        'avatar_url': profile.avatarUrl,
+        'fitness_goal': profile.fitnessGoal,
+      },
     );
   }
 }

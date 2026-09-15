@@ -103,7 +103,7 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              profileAsync.value?.email.isNotEmpty == true ? profileAsync.value!.email : 'Connected to MongoDB Atlas',
+                              profileAsync.value?.email.isNotEmpty == true ? profileAsync.value!.email : 'Signed in via Cloud Account',
                               style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                             ),
                           ],

@@ -267,8 +267,36 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
                           },
                         );
                       },
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, _) => Center(child: Text('Error: $err')),
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(color: AppColors.primary),
+                      ),
+                      error: (err, _) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.accentRose),
+                              const SizedBox(height: 12),
+                              Text(
+                                err.toString().replaceAll('Exception: ', ''),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () => ref.invalidate(workoutPlansProvider),
+                                icon: const Icon(Icons.refresh_rounded, size: 18),
+                                label: const Text('Retry'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: AppColors.primary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

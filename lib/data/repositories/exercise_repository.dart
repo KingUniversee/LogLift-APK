@@ -1,61 +1,56 @@
-import 'package:mongo_dart/mongo_dart.dart';
-import '../database/mongo_database.dart';
+import '../../core/network/api_client.dart';
 import '../models/exercise.dart';
 
 class ExerciseRepository {
-  ExerciseRepository([MongoDatabase? db]) : _db = db ?? MongoDatabase.instance;
-  final MongoDatabase _db;
+  ExerciseRepository([ApiClient? api]) : _api = api ?? ApiClient.instance;
+  final ApiClient _api;
 
   Future<List<Exercise>> getExercises({
     String? query,
     MuscleGroup? muscleGroup,
     ExerciseType? exerciseType,
   }) async {
-    final collection = await _db.exercisesCollection;
-    final selector = where.sortBy('name');
-
+    final queryParams = <String, String>{};
+    if (query != null && query.trim().isNotEmpty) {
+      queryParams['query'] = query.trim();
+    }
     if (muscleGroup != null) {
-      selector.eq('muscle_group', muscleGroup.name);
+      queryParams['muscleGroup'] = muscleGroup.name;
     }
     if (exerciseType != null) {
-      selector.eq('exercise_type', exerciseType.name);
+      queryParams['exerciseType'] = exerciseType.name;
     }
 
-    final docs = await collection.find(selector).toList();
+    final response = await _api.get(
+      '/exercises',
+      queryParams: queryParams.isNotEmpty ? queryParams : null,
+    );
 
-    var exercises = docs.map((doc) => Exercise.fromMap(doc)).toList();
-
-    if (query != null && query.trim().isNotEmpty) {
-      final q = query.trim().toLowerCase();
-      exercises = exercises.where((e) {
-        return e.name.toLowerCase().contains(q) ||
-            e.equipment.toLowerCase().contains(q) ||
-            e.instructions.toLowerCase().contains(q);
-      }).toList();
+    if (response is List) {
+      return response
+          .map((doc) => Exercise.fromMap(Map<String, dynamic>.from(doc as Map)))
+          .toList();
     }
-
-    return exercises;
+    return [];
   }
 
   Future<Exercise?> getExerciseById(String id) async {
-    final collection = await _db.exercisesCollection;
-    final doc = await collection.findOne(where.eq('id', id));
-    if (doc == null) return null;
-    return Exercise.fromMap(doc);
+    try {
+      final response = await _api.get('/exercises/$id');
+      if (response is Map<String, dynamic>) {
+        return Exercise.fromMap(response);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> saveExercise(Exercise exercise) async {
-    final collection = await _db.exercisesCollection;
-    final doc = exercise.toMap()..['_id'] = exercise.id;
-    await collection.replaceOne(
-      where.eq('id', exercise.id),
-      doc,
-      upsert: true,
-    );
+    await _api.post('/exercises', body: exercise.toMap());
   }
 
   Future<void> deleteExercise(String id) async {
-    final collection = await _db.exercisesCollection;
-    await collection.deleteOne(where.eq('id', id));
+    await _api.delete('/exercises/$id');
   }
 }

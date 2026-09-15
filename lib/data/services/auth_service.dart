@@ -1,105 +1,133 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
-import 'package:mongo_dart/mongo_dart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import '../database/mongo_database.dart';
+import '../../core/network/api_client.dart';
 import '../models/user_profile.dart';
 
 class AuthService {
-  AuthService([MongoDatabase? db]) : _db = db ?? MongoDatabase.instance;
-  final MongoDatabase _db;
-
-  static const _prefKeyUserId = 'liftlog_active_user_id';
-
-  String _hashPassword(String password, String salt) {
-    final bytes = utf8.encode('$password::$salt');
-    return sha256.convert(bytes).toString();
-  }
+  AuthService([ApiClient? apiClient]) : _api = apiClient ?? ApiClient.instance;
+  final ApiClient _api;
 
   Future<UserProfile> register({
     required String name,
     required String email,
     required String password,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final users = await _db.usersCollection;
+    final response = await _api.post(
+      '/auth/register',
+      body: {
+        'name': name.trim(),
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
+      includeAuth: false,
+    );
 
-    final existing = await users.findOne(where.eq('email', normalizedEmail));
-    if (existing != null) {
-      throw Exception('An account with this email already exists.');
+    if (response is Map<String, dynamic>) {
+      final token = response['token'] as String;
+      final refreshToken = response['refreshToken'] as String;
+      final userMap = Map<String, dynamic>.from(response['user'] as Map);
+      final user = UserProfile.fromMap(userMap);
+
+      await _api.setTokens(
+        token: token,
+        refreshToken: refreshToken,
+        userId: user.id,
+      );
+
+      return user;
     }
 
-    final userId = const Uuid().v4();
-    final salt = const Uuid().v4();
-    final passwordHash = _hashPassword(password, salt);
-    final now = DateTime.now();
-
-    final userDoc = {
-      '_id': userId,
-      'id': userId,
-      'name': name.trim(),
-      'email': normalizedEmail,
-      'password_hash': passwordHash,
-      'salt': salt,
-      'avatar_url': '',
-      'fitness_goal': 'Build Strength & Muscle',
-      'created_at': now.toIso8601String(),
-    };
-
-    await users.insertOne(userDoc);
-
-    // Persist session
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKeyUserId, userId);
-
-    return UserProfile.fromMap(userDoc);
+    throw const ApiException(
+      message: 'Unexpected server response during registration.',
+      statusCode: 500,
+    );
   }
 
   Future<UserProfile> login({
     required String email,
     required String password,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final users = await _db.usersCollection;
+    final response = await _api.post(
+      '/auth/login',
+      body: {
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
+      includeAuth: false,
+    );
 
-    final userDoc = await users.findOne(where.eq('email', normalizedEmail));
-    if (userDoc == null) {
-      throw Exception('No account found with this email.');
+    if (response is Map<String, dynamic>) {
+      final token = response['token'] as String;
+      final refreshToken = response['refreshToken'] as String;
+      final userMap = Map<String, dynamic>.from(response['user'] as Map);
+      final user = UserProfile.fromMap(userMap);
+
+      await _api.setTokens(
+        token: token,
+        refreshToken: refreshToken,
+        userId: user.id,
+      );
+
+      return user;
     }
 
-    final salt = userDoc['salt'] as String? ?? '';
-    final storedHash = userDoc['password_hash'] as String? ?? '';
-    final computedHash = _hashPassword(password, salt);
+    throw const ApiException(
+      message: 'Unexpected server response during login.',
+      statusCode: 500,
+    );
+  }
 
-    if (computedHash != storedHash) {
-      throw Exception('Incorrect password. Please try again.');
+  Future<UserProfile> loginWithGoogle(String idToken) async {
+    final response = await _api.post(
+      '/auth/google',
+      body: {'idToken': idToken},
+      includeAuth: false,
+    );
+
+    if (response is Map<String, dynamic>) {
+      final token = response['token'] as String;
+      final refreshToken = response['refreshToken'] as String;
+      final userMap = Map<String, dynamic>.from(response['user'] as Map);
+      final user = UserProfile.fromMap(userMap);
+
+      await _api.setTokens(
+        token: token,
+        refreshToken: refreshToken,
+        userId: user.id,
+      );
+
+      return user;
     }
 
-    final userId = userDoc['id'] as String? ?? userDoc['_id'].toString();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKeyUserId, userId);
-
-    return UserProfile.fromMap(userDoc);
+    throw const ApiException(
+      message: 'Failed to authenticate with Google.',
+      statusCode: 500,
+    );
   }
 
   Future<UserProfile?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(_prefKeyUserId);
-    if (userId == null || userId.isEmpty) return null;
+    final token = await _api.getAccessToken();
+    if (token == null || token.isEmpty) {
+      return null;
+    }
 
     try {
-      final users = await _db.usersCollection;
-      final doc = await users.findOne(where.eq('id', userId));
-      if (doc == null) return null;
-      return UserProfile.fromMap(doc);
+      final response = await _api.get('/auth/me');
+      if (response is Map<String, dynamic> && response.containsKey('user')) {
+        final userMap = Map<String, dynamic>.from(response['user'] as Map);
+        return UserProfile.fromMap(userMap);
+      }
+      return null;
     } catch (_) {
       return null;
     }
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefKeyUserId);
+    try {
+      await _api.post('/auth/logout');
+    } catch (_) {
+      // Ignored if offline or expired
+    } finally {
+      await _api.clearTokens();
+    }
   }
 }

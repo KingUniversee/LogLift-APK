@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liftlog/data/models/app_settings.dart';
 import 'package:liftlog/data/models/exercise.dart';
 import 'package:liftlog/data/models/personal_record.dart';
+import 'package:liftlog/data/models/user_profile.dart';
+import 'package:liftlog/data/models/workout_plan.dart';
 import 'package:liftlog/data/models/workout_session.dart';
 import 'package:liftlog/data/repositories/workout_session_repository.dart';
 import 'package:liftlog/features/shell/main_shell.dart';
@@ -32,9 +35,12 @@ void main() {
       ProviderScope(
         overrides: [
           todayPlanProvider.overrideWith((ref) => Future.value(null)),
+          workoutPlansProvider.overrideWith(() => _MockWorkoutPlansNotifier()),
           completedSessionsProvider.overrideWith(() => _MockEmptySessionsNotifier()),
           allPrsProvider.overrideWith(() => _MockEmptyPrsNotifier()),
           exercisesProvider.overrideWith(() => _MockEmptyExercisesNotifier()),
+          userProfileProvider.overrideWith(() => _MockUserProfileNotifier()),
+          settingsProvider.overrideWith(() => _MockSettingsNotifier()),
           sessionRepoProvider.overrideWithValue(_MockSessionRepository()),
         ],
         child: const MaterialApp(
@@ -74,6 +80,21 @@ class _MockSessionRepository extends WorkoutSessionRepository {
     int? limit,
     int? offset,
   }) async => [];
+}
+
+class _MockWorkoutPlansNotifier extends WorkoutPlansNotifier {
+  @override
+  Future<List<WorkoutPlan>> build() async => [];
+}
+
+class _MockUserProfileNotifier extends UserProfileNotifier {
+  @override
+  Future<UserProfile?> build() async => null;
+}
+
+class _MockSettingsNotifier extends SettingsNotifier {
+  @override
+  Future<AppSettings> build() async => const AppSettings();
 }
 
 class _MockEmptySessionsNotifier extends CompletedSessionsNotifier {
