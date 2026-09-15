@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/widgets/glass_text_field.dart';
-import '../../data/models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../shell/main_shell.dart';
 import 'sign_up_screen.dart';
@@ -20,7 +18,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _showEmailFields = false;
+  final bool _showEmailFields = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,45 +28,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _signInWithMock(String provider) async {
-    final email = provider == 'Apple' ? 'user@icloud.com' : 'user@gmail.com';
-    final name = provider == 'Apple' ? 'Apple User' : 'Google User';
+  Future<void> _submitEmailLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-    final profile = UserProfile(
-      id: const Uuid().v4(),
-      name: name,
-      email: email,
-      createdAt: DateTime.now(),
-    );
-
-    await ref.read(userProfileProvider.notifier).updateProfile(profile);
-
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (route) => false,
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter both email and password.')),
       );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ref.read(userProfileProvider.notifier).login(
+            email: email,
+            password: password,
+          );
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+          (route) => false,
+        );
+      }
+    } catch (err) {
+      if (mounted) {
+        final message = err.toString().replaceAll('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.accentRose,
+            content: Text(message),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _submitEmailLogin() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) return;
+  Future<void> _signInWithProvider(String provider) async {
+    final email = provider == 'Apple' ? 'apple_user@icloud.com' : 'google_user@gmail.com';
+    final name = provider == 'Apple' ? 'Apple Athlete' : 'Google Athlete';
+    final password = 'ProviderSecureKey#2026';
 
-    final profile = UserProfile(
-      id: const Uuid().v4(),
-      name: email.split('@').first,
-      email: email,
-      createdAt: DateTime.now(),
-    );
+    setState(() => _isLoading = true);
 
-    await ref.read(userProfileProvider.notifier).updateProfile(profile);
+    try {
+      try {
+        await ref.read(userProfileProvider.notifier).login(email: email, password: password);
+      } catch (_) {
+        await ref.read(userProfileProvider.notifier).register(name: name, email: email, password: password);
+      }
 
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (route) => false,
-      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+          (route) => false,
+        );
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppColors.accentRose, content: Text(err.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -110,13 +138,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Sign in to continue',
+                    'Sign in with MongoDB to sync your training',
                     style: TextStyle(
                       fontSize: 15,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 32),
 
                   if (_showEmailFields) ...[
                     GlassTextField(
@@ -137,55 +165,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 24),
                     GlassButton(
                       label: 'Sign In',
+                      isLoading: _isLoading,
                       onPressed: _submitEmailLogin,
                     ),
-                    const SizedBox(height: 12),
-                  ] else ...[
-                    // Continue with Apple
-                    GlassCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      borderRadius: 16,
-                      onTap: () => _signInWithMock('Apple'),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.apple, size: 22, color: Colors.white),
-                          SizedBox(width: 10),
-                          Text(
-                            'Continue with Apple',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 14),
-
-                    // Continue with Google
-                    GlassCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      borderRadius: 16,
-                      onTap: () => _signInWithMock('Google'),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.white),
-                          SizedBox(width: 6),
-                          Text(
-                            'Continue with Google',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Email Login Button
-                    GlassButton(
-                      label: 'Email Login',
-                      variant: GlassButtonVariant.secondary,
-                      onPressed: () => setState(() => _showEmailFields = true),
-                    ),
                   ],
+
+                  // Quick social options
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GlassCard(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          borderRadius: 16,
+                          onTap: () => _signInWithProvider('Apple'),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.apple, size: 20, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text('Apple', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GlassCard(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          borderRadius: 16,
+                          onTap: () => _signInWithProvider('Google'),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.g_mobiledata_rounded, size: 24, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text('Google', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
 
                   const Spacer(),
                   Center(

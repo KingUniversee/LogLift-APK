@@ -1,77 +1,61 @@
-import 'package:sqflite/sqflite.dart';
-import '../database/app_database.dart';
+import 'package:mongo_dart/mongo_dart.dart';
+import '../database/mongo_database.dart';
 import '../models/exercise.dart';
 
 class ExerciseRepository {
-  ExerciseRepository([Database? db]) : _db = db;
-  final Database? _db;
-
-  Future<Database> get _database async => _db ?? await AppDatabase.instance.database;
+  ExerciseRepository([MongoDatabase? db]) : _db = db ?? MongoDatabase.instance;
+  final MongoDatabase _db;
 
   Future<List<Exercise>> getExercises({
     String? query,
     MuscleGroup? muscleGroup,
     ExerciseType? exerciseType,
   }) async {
-    final db = await _database;
-    final whereClauses = <String>[];
-    final whereArgs = <dynamic>[];
-
-    if (query != null && query.trim().isNotEmpty) {
-      whereClauses.add('(name LIKE ? OR equipment LIKE ? OR instructions LIKE ?)');
-      final term = '%${query.trim()}%';
-      whereArgs.addAll([term, term, term]);
-    }
+    final collection = await _db.exercisesCollection;
+    final selector = where.sortBy('name');
 
     if (muscleGroup != null) {
-      whereClauses.add('muscle_group = ?');
-      whereArgs.add(muscleGroup.name);
+      selector.eq('muscle_group', muscleGroup.name);
     }
-
     if (exerciseType != null) {
-      whereClauses.add('exercise_type = ?');
-      whereArgs.add(exerciseType.name);
+      selector.eq('exercise_type', exerciseType.name);
     }
 
-    final whereString = whereClauses.isEmpty ? null : whereClauses.join(' AND ');
+    final docs = await collection.find(selector).toList();
 
-    final maps = await db.query(
-      'exercises',
-      where: whereString,
-      whereArgs: whereArgs.isEmpty ? null : whereArgs,
-      orderBy: 'name ASC',
-    );
+    var exercises = docs.map((doc) => Exercise.fromMap(doc)).toList();
 
-    return maps.map(Exercise.fromMap).toList();
+    if (query != null && query.trim().isNotEmpty) {
+      final q = query.trim().toLowerCase();
+      exercises = exercises.where((e) {
+        return e.name.toLowerCase().contains(q) ||
+            e.equipment.toLowerCase().contains(q) ||
+            e.instructions.toLowerCase().contains(q);
+      }).toList();
+    }
+
+    return exercises;
   }
 
   Future<Exercise?> getExerciseById(String id) async {
-    final db = await _database;
-    final maps = await db.query(
-      'exercises',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Exercise.fromMap(maps.first);
+    final collection = await _db.exercisesCollection;
+    final doc = await collection.findOne(where.eq('id', id));
+    if (doc == null) return null;
+    return Exercise.fromMap(doc);
   }
 
   Future<void> saveExercise(Exercise exercise) async {
-    final db = await _database;
-    await db.insert(
-      'exercises',
-      exercise.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final collection = await _db.exercisesCollection;
+    final doc = exercise.toMap()..['_id'] = exercise.id;
+    await collection.replaceOne(
+      where.eq('id', exercise.id),
+      doc,
+      upsert: true,
     );
   }
 
   Future<void> deleteExercise(String id) async {
-    final db = await _database;
-    await db.delete(
-      'exercises',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final collection = await _db.exercisesCollection;
+    await collection.deleteOne(where.eq('id', id));
   }
 }

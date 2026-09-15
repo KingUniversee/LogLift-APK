@@ -4,17 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liftlog/data/models/exercise.dart';
 import 'package:liftlog/data/models/personal_record.dart';
 import 'package:liftlog/data/models/workout_session.dart';
+import 'package:liftlog/data/repositories/workout_session_repository.dart';
 import 'package:liftlog/features/shell/main_shell.dart';
 import 'package:liftlog/main.dart';
 import 'package:liftlog/providers/app_providers.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  setUpAll(() {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  });
-
   testWidgets('renders SplashScreen with branding and get started button', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
@@ -40,6 +35,7 @@ void main() {
           completedSessionsProvider.overrideWith(() => _MockEmptySessionsNotifier()),
           allPrsProvider.overrideWith(() => _MockEmptyPrsNotifier()),
           exercisesProvider.overrideWith(() => _MockEmptyExercisesNotifier()),
+          sessionRepoProvider.overrideWithValue(_MockSessionRepository()),
         ],
         child: const MaterialApp(
           home: MainShell(),
@@ -62,6 +58,22 @@ void main() {
     expect(find.text('Progress'), findsOneWidget);
     expect(find.text('Reports'), findsOneWidget);
   });
+}
+
+class _MockSessionRepository extends WorkoutSessionRepository {
+  @override
+  Future<WorkoutSession?> getActiveSession() async => null;
+
+  @override
+  Future<List<WorkoutSession>> getCompletedSessions({
+    String? query,
+    String? planId,
+    String? exerciseId,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? limit,
+    int? offset,
+  }) async => [];
 }
 
 class _MockEmptySessionsNotifier extends CompletedSessionsNotifier {

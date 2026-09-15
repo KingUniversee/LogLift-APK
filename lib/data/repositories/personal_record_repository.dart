@@ -1,61 +1,46 @@
-import 'package:sqflite/sqflite.dart';
-import '../database/app_database.dart';
+import 'package:mongo_dart/mongo_dart.dart';
+import '../database/mongo_database.dart';
 import '../models/personal_record.dart';
 
 class PersonalRecordRepository {
-  PersonalRecordRepository([Database? db]) : _db = db;
-  final Database? _db;
-
-  Future<Database> get _database async => _db ?? await AppDatabase.instance.database;
+  PersonalRecordRepository([MongoDatabase? db]) : _db = db ?? MongoDatabase.instance;
+  final MongoDatabase _db;
 
   Future<List<PersonalRecord>> getAllPRs() async {
-    final db = await _database;
-    final maps = await db.query(
-      'personal_records',
-      orderBy: 'achieved_at DESC',
-    );
-    return maps.map(PersonalRecord.fromMap).toList();
+    final collection = await _db.prsCollection;
+    final docs = await collection.find(where.sortBy('achieved_at', descending: true)).toList();
+    return docs.map((d) => PersonalRecord.fromMap(d)).toList();
   }
 
   Future<List<PersonalRecord>> getPRsForExercise(String exerciseId) async {
-    final db = await _database;
-    final maps = await db.query(
-      'personal_records',
-      where: 'exercise_id = ?',
-      whereArgs: [exerciseId],
-      orderBy: 'achieved_at DESC',
-    );
-    return maps.map(PersonalRecord.fromMap).toList();
+    final collection = await _db.prsCollection;
+    final docs = await collection.find(
+      where.eq('exercise_id', exerciseId).sortBy('achieved_at', descending: true),
+    ).toList();
+    return docs.map((d) => PersonalRecord.fromMap(d)).toList();
   }
 
   Future<PersonalRecord?> getBestRecord(String exerciseId, PRType recordType) async {
-    final db = await _database;
-    final maps = await db.query(
-      'personal_records',
-      where: 'exercise_id = ? AND record_type = ?',
-      whereArgs: [exerciseId, recordType.name],
-      orderBy: 'value DESC, achieved_at DESC',
-      limit: 1,
+    final collection = await _db.prsCollection;
+    final doc = await collection.findOne(
+      where.eq('exercise_id', exerciseId).eq('record_type', recordType.name).sortBy('value', descending: true),
     );
-    if (maps.isEmpty) return null;
-    return PersonalRecord.fromMap(maps.first);
+    if (doc == null) return null;
+    return PersonalRecord.fromMap(doc);
   }
 
   Future<void> savePR(PersonalRecord pr) async {
-    final db = await _database;
-    await db.insert(
-      'personal_records',
-      pr.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final collection = await _db.prsCollection;
+    final doc = pr.toMap()..['_id'] = pr.id;
+    await collection.replaceOne(
+      where.eq('id', pr.id),
+      doc,
+      upsert: true,
     );
   }
 
   Future<void> deletePRsForSession(String sessionId) async {
-    final db = await _database;
-    await db.delete(
-      'personal_records',
-      where: 'session_id = ?',
-      whereArgs: [sessionId],
-    );
+    final collection = await _db.prsCollection;
+    await collection.deleteMany(where.eq('session_id', sessionId));
   }
 }

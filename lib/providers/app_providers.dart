@@ -18,7 +18,10 @@ import '../services/report_service.dart';
 import '../services/statistics_service.dart';
 import '../services/streak_engine.dart';
 
-// Repositories
+import '../data/services/auth_service.dart';
+
+// Repositories & Services
+final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 final exerciseRepoProvider = Provider<ExerciseRepository>((ref) => ExerciseRepository());
 final planRepoProvider = Provider<WorkoutPlanRepository>((ref) => WorkoutPlanRepository());
 final sessionRepoProvider = Provider<WorkoutSessionRepository>((ref) => WorkoutSessionRepository());
@@ -38,11 +41,52 @@ final statisticsServiceProvider = Provider<StatisticsService>((ref) {
 final reportServiceProvider = Provider<ReportService>((ref) => const ReportService());
 final pdfExportServiceProvider = Provider<PdfExportService>((ref) => const PdfExportService());
 
-// User Profile Notifier
+// User Profile & Authentication Notifier
 class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
   @override
   Future<UserProfile?> build() async {
-    return ref.watch(userProfileRepoProvider).getProfile();
+    return ref.watch(authServiceProvider).getCurrentUser();
+  }
+
+  Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      final user = await ref.read(authServiceProvider).register(
+            name: name,
+            email: email,
+            password: password,
+          );
+      state = AsyncData(user);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      final user = await ref.read(authServiceProvider).login(
+            email: email,
+            password: password,
+          );
+      state = AsyncData(user);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> logout() async {
+    await ref.read(authServiceProvider).logout();
+    state = const AsyncData(null);
   }
 
   Future<void> updateProfile(UserProfile profile) async {

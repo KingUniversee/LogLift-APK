@@ -1,26 +1,26 @@
-import 'package:sqflite/sqflite.dart';
-import '../database/app_database.dart';
+import 'package:mongo_dart/mongo_dart.dart';
+import '../database/mongo_database.dart';
 import '../models/user_profile.dart';
+import '../services/auth_service.dart';
 
 class UserProfileRepository {
-  UserProfileRepository([Database? db]) : _db = db;
-  final Database? _db;
+  UserProfileRepository([MongoDatabase? db, AuthService? authService])
+      : _db = db ?? MongoDatabase.instance,
+        _authService = authService ?? AuthService();
 
-  Future<Database> get _database async => _db ?? await AppDatabase.instance.database;
+  final MongoDatabase _db;
+  final AuthService _authService;
 
   Future<UserProfile?> getProfile() async {
-    final db = await _database;
-    final maps = await db.query('user_profile', limit: 1);
-    if (maps.isEmpty) return null;
-    return UserProfile.fromMap(maps.first);
+    return _authService.getCurrentUser();
   }
 
   Future<void> saveProfile(UserProfile profile) async {
-    final db = await _database;
-    await db.insert(
-      'user_profile',
-      profile.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final users = await _db.usersCollection;
+    await users.replaceOne(
+      where.eq('id', profile.id),
+      profile.toMap()..['_id'] = profile.id,
+      upsert: true,
     );
   }
 }

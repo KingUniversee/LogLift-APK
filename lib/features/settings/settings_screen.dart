@@ -6,6 +6,7 @@ import '../../core/widgets/glass_card.dart';
 import '../../data/models/app_settings.dart';
 import '../../providers/app_providers.dart';
 import '../personal_records/personal_records_screen.dart';
+import '../splash/splash_screen.dart';
 import '../statistics/statistics_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -102,12 +103,26 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              profileAsync.value?.email.isNotEmpty == true ? profileAsync.value!.email : 'Offline Profile',
+                              profileAsync.value?.email.isNotEmpty == true ? profileAsync.value!.email : 'Connected to MongoDB Atlas',
                               style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                             ),
                           ],
                         ),
                       ),
+                      if (profileAsync.value != null)
+                        IconButton(
+                          icon: const Icon(Icons.logout_rounded, color: AppColors.accentRose),
+                          tooltip: 'Sign Out',
+                          onPressed: () async {
+                            await ref.read(userProfileProvider.notifier).logout();
+                            if (context.mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(builder: (_) => const SplashScreen()),
+                                (route) => false,
+                              );
+                            }
+                          },
+                        ),
                     ],
                   ),
                 ),

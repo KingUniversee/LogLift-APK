@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_text_field.dart';
-import '../../data/models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../shell/main_shell.dart';
 
@@ -20,6 +18,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -32,24 +31,53 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _handleSignUp() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-    if (name.isEmpty || email.isEmpty) return;
-
-    final profile = UserProfile(
-      id: const Uuid().v4(),
-      name: name,
-      email: email,
-      createdAt: DateTime.now(),
-    );
-
-    await ref.read(userProfileProvider.notifier).updateProfile(profile);
-
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (route) => false,
-      );
+    if (name.isEmpty) {
+      _showError('Please enter your full name.');
+      return;
     }
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      _showError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ref.read(userProfileProvider.notifier).register(
+            name: name,
+            email: email,
+            password: password,
+          );
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+          (route) => false,
+        );
+      }
+    } catch (err) {
+      if (mounted) {
+        final message = err.toString().replaceAll('Exception: ', '');
+        _showError(message);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.accentRose,
+        content: Text(message),
+      ),
+    );
   }
 
   @override
@@ -77,7 +105,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
                     const Text(
                       'Create Account',
                       style: TextStyle(
@@ -89,19 +117,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Start your fitness journey',
+                      'Start your fitness journey with MongoDB sync',
                       style: TextStyle(
                         fontSize: 15,
                         color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 32),
 
                     GlassTextField(
                       controller: _nameController,
                       label: 'Name',
                       hint: 'Alex Miller',
                       prefixIcon: Icons.person_outline_rounded,
+                      autofocus: true,
                     ),
                     const SizedBox(height: 16),
 
@@ -117,7 +146,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     GlassTextField(
                       controller: _passwordController,
                       label: 'Password',
-                      hint: '••••••••',
+                      hint: 'At least 6 characters',
                       prefixIcon: Icons.lock_outline_rounded,
                       obscureText: true,
                     ),
@@ -125,6 +154,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
                     GlassButton(
                       label: 'Create Account',
+                      isLoading: _isLoading,
                       onPressed: _handleSignUp,
                     ),
                     const SizedBox(height: 24),
