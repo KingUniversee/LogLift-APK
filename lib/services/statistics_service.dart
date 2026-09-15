@@ -20,6 +20,22 @@ class OverallStats {
     required this.muscleDistribution,
   });
 
+  factory OverallStats.empty() => const OverallStats(
+    totalWorkouts: 0,
+    totalVolume: 0.0,
+    totalSets: 0,
+    totalReps: 0,
+    totalDurationSeconds: 0,
+    averageDurationSeconds: 0.0,
+    averageVolume: 0.0,
+    averageSets: 0.0,
+    averageReps: 0.0,
+    currentStreak: 0,
+    longestStreak: 0,
+    prCount: 0,
+    muscleDistribution: {},
+  );
+
   final int totalWorkouts;
   final double totalVolume;
   final int totalSets;

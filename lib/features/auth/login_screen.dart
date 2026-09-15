@@ -6,6 +6,7 @@ import '../../core/widgets/glass_card.dart';
 import '../../core/widgets/glass_text_field.dart';
 import '../../providers/app_providers.dart';
 import '../shell/main_shell.dart';
+import '../../core/widgets/server_settings_dialog.dart';
 import 'sign_up_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -110,6 +111,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _showServerSettingsDialog() {
+    showServerSettingsDialog(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,18 +131,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: IconButton(
-                      icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const MainShell()),
-                        );
-                      },
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (Navigator.of(context).canPop())
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textSecondary, size: 20),
+                          onPressed: () => Navigator.of(context).pop(),
+                        )
+                      else
+                        const SizedBox(width: 40),
+                      IconButton(
+                        icon: const Icon(Icons.dns_rounded, color: AppColors.textSecondary),
+                        tooltip: 'Configure Backend Server',
+                        onPressed: _showServerSettingsDialog,
+                      ),
+                    ],
                   ),
                   const Spacer(),
+                  Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 28,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Image.asset(
+                        'assets/images/app_logo.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.fitness_center_rounded,
+                          size: 38,
+                          color: AppColors.primaryLight,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
                     'Welcome Back',
                     style: TextStyle(

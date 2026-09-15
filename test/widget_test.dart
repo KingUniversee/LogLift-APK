@@ -11,19 +11,30 @@ import 'package:liftlog/data/repositories/workout_session_repository.dart';
 import 'package:liftlog/features/shell/main_shell.dart';
 import 'package:liftlog/main.dart';
 import 'package:liftlog/providers/app_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('renders SplashScreen with branding and get started button', (WidgetTester tester) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('renders AuthGate and SplashScreen requiring Sign In or Account Creation', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: WorkoutLogApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Workout Log'), findsOneWidget);
+    expect(find.text('LiftLog'), findsOneWidget);
     expect(find.text('Build Better Habits\nTrack Your Progress'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Create Account'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
+    // Enforce that "Get Started" bypass is permanently removed
+    expect(find.text('Get Started'), findsNothing);
   });
 
   testWidgets('renders MainShell and verifies dynamic empty states without fake data', (WidgetTester tester) async {

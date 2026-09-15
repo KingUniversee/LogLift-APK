@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/network/api_config.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/widgets/server_settings_dialog.dart';
 import '../../data/models/app_settings.dart';
 import '../../providers/app_providers.dart';
+import '../auth/login_screen.dart';
 import '../personal_records/personal_records_screen.dart';
-import '../splash/splash_screen.dart';
 import '../statistics/statistics_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -22,27 +24,39 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleDeleteAllData(BuildContext context, WidgetRef ref) async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete All Data?'),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.borderGlassHighlight),
+        ),
+        title: const Text(
+          'Log Out of LiftLog?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
         content: const Text(
-          'This will permanently erase all exercises, workout plans, completed sessions, and personal records. This action cannot be undone.',
+          'Are you sure you want to log out? Your workouts, plans, and history will remain safely stored on your account.',
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.accentRose),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Erase Everything'),
+            child: const Text('Log Out'),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await ref.read(settingsRepoProvider).deleteAllData();
+      await ref.read(userProfileProvider.notifier).logout();
       ref.invalidate(exercisesProvider);
       ref.invalidate(workoutPlansProvider);
       ref.invalidate(completedSessionsProvider);
@@ -51,8 +65,9 @@ class SettingsScreen extends ConsumerWidget {
       ref.invalidate(todayPlanProvider);
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All data has been reset.')),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
         );
       }
     }
@@ -113,15 +128,7 @@ class SettingsScreen extends ConsumerWidget {
                         IconButton(
                           icon: const Icon(Icons.logout_rounded, color: AppColors.accentRose),
                           tooltip: 'Sign Out',
-                          onPressed: () async {
-                            await ref.read(userProfileProvider.notifier).logout();
-                            if (context.mounted) {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const SplashScreen()),
-                                (route) => false,
-                              );
-                            }
-                          },
+                          onPressed: () => _handleLogout(context, ref),
                         ),
                     ],
                   ),
@@ -255,13 +262,21 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Data Management
-                const Text('Data Management', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textSecondary, fontSize: 13)),
+                // Account & Data Management
+                const Text('Account & Data', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textSecondary, fontSize: 13)),
                 const SizedBox(height: 10),
                 GlassCard(
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
+                      ListTile(
+                        leading: const Icon(Icons.dns_outlined, color: AppColors.accentCyan),
+                        title: const Text('Server Connection', style: TextStyle(color: Colors.white, fontSize: 15)),
+                        subtitle: Text(ApiConfig.baseUrl, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        onTap: () => showServerSettingsDialog(context),
+                      ),
+                      const Divider(height: 1, color: Colors.white10),
                       ListTile(
                         leading: const Icon(Icons.file_download_outlined, color: AppColors.primaryLight),
                         title: const Text('Export Backup (JSON)', style: TextStyle(color: Colors.white, fontSize: 15)),
@@ -270,10 +285,10 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       const Divider(height: 1, color: Colors.white10),
                       ListTile(
-                        leading: const Icon(Icons.delete_forever_rounded, color: AppColors.accentRose),
-                        title: const Text('Delete All Data', style: TextStyle(color: AppColors.accentRose, fontSize: 15, fontWeight: FontWeight.w600)),
-                        subtitle: const Text('Reset database to clean empty state', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        onTap: () => _handleDeleteAllData(context, ref),
+                        leading: const Icon(Icons.logout_rounded, color: AppColors.accentRose),
+                        title: const Text('Log Out', style: TextStyle(color: AppColors.accentRose, fontSize: 15, fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Securely sign out without erasing workout records', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        onTap: () => _handleLogout(context, ref),
                       ),
                     ],
                   ),

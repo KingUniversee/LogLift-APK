@@ -39,12 +39,14 @@ class ApiClient {
     http.Client? httpClient,
     String? baseUrl,
   })  : _httpClient = httpClient ?? http.Client(),
-        _baseUrl = baseUrl ?? ApiConfig.baseUrl;
+        _customBaseUrl = baseUrl;
 
   static final ApiClient instance = ApiClient();
 
   final http.Client _httpClient;
-  final String _baseUrl;
+  final String? _customBaseUrl;
+
+  String get _baseUrl => _customBaseUrl ?? ApiConfig.baseUrl;
 
   static const _prefKeyToken = 'liftlog_access_token';
   static const _prefKeyRefreshToken = 'liftlog_refresh_token';
@@ -53,7 +55,7 @@ class ApiClient {
   bool _isRefreshing = false;
   final List<Completer<bool>> _refreshWaiters = [];
 
-  String get baseUrl => _baseUrl;
+  String get baseUrl => _customBaseUrl ?? ApiConfig.baseUrl;
 
   Future<String?> getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -197,12 +199,14 @@ class ApiClient {
   }) async {
     http.Response response;
     try {
-      response = await requestFn().timeout(const Duration(seconds: 15));
+      response = await requestFn().timeout(const Duration(seconds: 8));
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw NetworkException(
+        message: 'Network connection unavailable. Could not reach server at $baseUrl.',
+      );
     } on TimeoutException catch (_) {
-      throw const NetworkException(
-        message: 'Connection timed out. Please verify that the LiftLog backend server is running.',
+      throw NetworkException(
+        message: 'Connection timed out connecting to $baseUrl. Please verify that the backend server is running.',
       );
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -214,7 +218,7 @@ class ApiClient {
       final refreshed = await _attemptTokenRefresh();
       if (refreshed) {
         try {
-          response = await requestFn().timeout(const Duration(seconds: 15));
+          response = await requestFn().timeout(const Duration(seconds: 8));
         } catch (e) {
           throw const NetworkException();
         }

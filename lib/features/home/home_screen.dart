@@ -47,9 +47,19 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-              children: [
+            child: RefreshIndicator(
+              color: AppColors.primaryLight,
+              backgroundColor: const Color(0xFF0F172A),
+              onRefresh: () async {
+                ref.invalidate(todayPlanProvider);
+                ref.invalidate(completedSessionsProvider);
+                ref.invalidate(allPrsProvider);
+                ref.invalidate(overallStatsProvider);
+                ref.invalidate(userProfileProvider);
+              },
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+                children: [
                 // Top App Bar / Header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -180,7 +190,7 @@ class HomeScreen extends ConsumerWidget {
                 // Today's Planned Workout Section
                 todayPlanAsync.when(
                   data: (plan) => _buildTodayPlanHero(context, ref, plan),
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => _buildTodayPlanSkeleton(),
                   error: (err, stack) => _buildTodayPlanHero(context, ref, null),
                 ),
                 const SizedBox(height: 24),
@@ -219,13 +229,17 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     );
                   },
-                  loading: () => const SizedBox(height: 110),
+                  loading: () => _buildStatsSkeleton(),
                   error: (err, stack) => const SizedBox(),
                 ),
                 const SizedBox(height: 24),
 
                 // Recent Progress Bar Chart
-                _buildRecentProgressCard(context, sessionsAsync.value ?? []),
+                sessionsAsync.when(
+                  data: (sessions) => _buildRecentProgressCard(context, sessions),
+                  loading: () => _buildRecentProgressSkeleton(),
+                  error: (err, stack) => _buildRecentProgressError(ref, err),
+                ),
                 const SizedBox(height: 24),
 
                 // Personal Records Card Preview
@@ -237,9 +251,10 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
+        ),
+      ],
+    ),
+  );
   }
 
   Widget _buildTodayPlanHero(BuildContext context, WidgetRef ref, WorkoutPlan? plan) {
@@ -537,6 +552,131 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 22),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayPlanSkeleton() {
+    return GlassCard(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 14,
+                height: 14,
+                decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 90,
+                height: 10,
+                decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(5)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: 180,
+            height: 22,
+            decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(6)),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 120,
+            height: 12,
+            decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsSkeleton() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 110,
+            decoration: BoxDecoration(color: AppColors.surfaceGlass, borderRadius: BorderRadius.circular(18)),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Container(
+            height: 110,
+            decoration: BoxDecoration(color: AppColors.surfaceGlass, borderRadius: BorderRadius.circular(18)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentProgressSkeleton() {
+    return Container(
+      height: 160,
+      decoration: BoxDecoration(color: AppColors.surfaceGlass, borderRadius: BorderRadius.circular(20)),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryLight),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentProgressError(WidgetRef ref, Object err) {
+    final cleanMessage = err.toString().replaceAll('Exception: ', '');
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: AppColors.accentRose, size: 32),
+          const SizedBox(height: 10),
+          Text(
+            cleanMessage,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () => ref.invalidate(completedSessionsProvider),
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: AppColors.primary),
+            ),
+          ),
         ],
       ),
     );

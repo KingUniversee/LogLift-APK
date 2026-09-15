@@ -255,16 +255,19 @@ final allPrsProvider = AsyncNotifierProvider<AllPrsNotifier, List<PersonalRecord
   AllPrsNotifier.new,
 );
 
-// Overall Statistics Provider (Derived from Sessions & PRs)
 final overallStatsProvider = FutureProvider<OverallStats>((ref) async {
-  final sessions = await ref.watch(completedSessionsProvider.future);
-  final prs = await ref.watch(allPrsProvider.future);
-  final exercises = await ref.watch(exercisesProvider.future);
   final statsService = ref.watch(statisticsServiceProvider);
+  try {
+    final sessions = await ref.watch(completedSessionsProvider.future);
+    final prs = await ref.watch(allPrsProvider.future);
+    final exercises = await ref.watch(exercisesProvider.future);
 
-  return statsService.computeStats(
-    sessions: sessions,
-    prs: prs,
-    allExercises: exercises,
-  );
+    return statsService.computeStats(
+      sessions: sessions,
+      prs: prs,
+      allExercises: exercises,
+    );
+  } catch (_) {
+    return OverallStats.empty();
+  }
 });

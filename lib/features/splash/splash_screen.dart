@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/glass_button.dart';
-import '../../core/widgets/glass_card.dart';
 import '../auth/login_screen.dart';
-import '../shell/main_shell.dart';
+import '../auth/sign_up_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -67,35 +66,35 @@ class SplashScreen extends StatelessWidget {
                   // Center Logo & Hero
                   Column(
                     children: [
-                      GlassCard(
-                        padding: const EdgeInsets.all(24),
-                        borderRadius: 36,
-                        borderColor: AppColors.borderGlassHighlight,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.primary.withValues(alpha: 0.3),
-                            Colors.white.withValues(alpha: 0.05),
+                      Container(
+                        width: 104,
+                        height: 104,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(26),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.4),
+                              blurRadius: 36,
+                              spreadRadius: 4,
+                            ),
                           ],
                         ),
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                          child: const Icon(
+                        clipBehavior: Clip.antiAlias,
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
                             Icons.fitness_center_rounded,
-                            size: 44,
-                            color: AppColors.textPrimary,
+                            size: 48,
+                            color: AppColors.primaryLight,
                           ),
                         ),
                       ),
                       const SizedBox(height: 36),
                       const Text(
-                        'Workout Log',
+                        'LiftLog',
                         style: TextStyle(
-                          fontSize: 34,
+                          fontSize: 36,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
                           letterSpacing: -0.8,
@@ -115,14 +114,14 @@ class SplashScreen extends StatelessWidget {
                     ],
                   ),
 
-                  // Buttons
+                  // Authentication Buttons (Signup required before using app)
                   Column(
                     children: [
                       GlassButton(
-                        label: 'Get Started',
+                        label: 'Create Account',
                         onPressed: () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const MainShell()),
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SignUpScreen()),
                           );
                         },
                       ),

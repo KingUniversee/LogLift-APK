@@ -105,7 +105,34 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.35),
+                              blurRadius: 28,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.fitness_center_rounded,
+                            size: 38,
+                            color: AppColors.primaryLight,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     const Text(
                       'Create Account',
                       style: TextStyle(
