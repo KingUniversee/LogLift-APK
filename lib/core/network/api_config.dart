@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
@@ -7,6 +5,9 @@ class ApiConfig {
 
   static const String _prefKeyCustomBaseUrl = 'liftlog_custom_base_url';
   static String? _cachedCustomBaseUrl;
+
+  /// Production deployed backend base URL
+  static const String productionBaseUrl = 'http://13.140.58.252:22658';
 
   static Future<void> loadCustomBaseUrl() async {
     try {
@@ -25,9 +26,6 @@ class ApiConfig {
       while (clean.endsWith('/')) {
         clean = clean.substring(0, clean.length - 1);
       }
-      if (!clean.endsWith('/api')) {
-        clean = '$clean/api';
-      }
       await prefs.setString(_prefKeyCustomBaseUrl, clean);
       _cachedCustomBaseUrl = clean;
     }
@@ -37,7 +35,7 @@ class ApiConfig {
   /// Priority:
   /// 1. Custom URL saved by user in Settings/Network
   /// 2. --dart-define=API_BASE_URL=...
-  /// 3. Platform default (10.0.2.2 for Android emulator, localhost for iOS/desktop)
+  /// 3. Production default: http://13.140.58.252:22658
   static String get baseUrl {
     if (_cachedCustomBaseUrl != null && _cachedCustomBaseUrl!.isNotEmpty) {
       return _cachedCustomBaseUrl!;
@@ -48,11 +46,7 @@ class ApiConfig {
       return fromEnv.endsWith('/') ? fromEnv.substring(0, fromEnv.length - 1) : fromEnv;
     }
 
-    if (!kIsWeb && Platform.isAndroid) {
-      return 'http://10.0.2.2:5000/api';
-    }
-
-    return 'http://localhost:5000/api';
+    return productionBaseUrl;
   }
 
   // Google OAuth Web Client ID for LiftLog

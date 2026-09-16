@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:liftlog/core/network/api_client.dart';
+import 'package:liftlog/core/network/api_config.dart';
 import 'package:liftlog/data/models/exercise.dart';
 import 'package:liftlog/data/models/personal_record.dart';
 import 'package:liftlog/data/models/workout_session.dart';
@@ -15,6 +16,13 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  group('ApiConfig Tests', () {
+    test('Defaults to production base URL http://13.140.58.252:22658', () {
+      expect(ApiConfig.baseUrl, equals('http://13.140.58.252:22658'));
+      expect(ApiConfig.productionBaseUrl, equals('http://13.140.58.252:22658'));
+    });
   });
 
   group('ApiClient and Token Lifecycle Tests', () {
@@ -72,12 +80,30 @@ void main() {
         throwsA(isA<UnauthorizedException>()),
       );
     });
+
+    test('Normalizes endpoints to include /api without duplication', () async {
+      Uri? capturedUri;
+      final mockClient = MockClient((request) async {
+        capturedUri = request.url;
+        return http.Response('[]', 200);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+
+      await api.get('/exercises');
+      expect(capturedUri.toString(), equals('http://13.140.58.252:22658/api/exercises'));
+
+      await api.get('/api/exercises');
+      expect(capturedUri.toString(), equals('http://13.140.58.252:22658/api/exercises'));
+    });
   });
 
   group('AuthService with REST API Tests', () {
-    test('Registers user and persists access token', () async {
+    test('Registers user at /api/auth/register and persists access token', () async {
+      String? requestPath;
       final mockClient = MockClient((request) async {
-        if (request.url.path.endsWith('/auth/register')) {
+        requestPath = request.url.path;
+        if (request.url.path == '/api/auth/register') {
           return http.Response(
             jsonEncode({
               'token': 'jwt_access_alpha',
@@ -86,9 +112,9 @@ void main() {
                 'id': 'athlete_uuid_1',
                 'name': 'Alex Strong',
                 'email': 'alex@liftlog.test',
-                'avatar_url': '',
-                'fitness_goal': 'Build Strength & Muscle',
-                'created_at': DateTime.now().toIso8601String(),
+                'avatarUrl': '',
+                'fitnessGoal': 'Build Strength & Muscle',
+                'createdAt': DateTime.now().toIso8601String(),
               },
             }),
             201,
@@ -106,10 +132,101 @@ void main() {
         password: 'SecurePassword123!',
       );
 
+      expect(requestPath, equals('/api/auth/register'));
       expect(user.id, equals('athlete_uuid_1'));
       expect(user.name, equals('Alex Strong'));
       expect(await api.getAccessToken(), equals('jwt_access_alpha'));
       expect(await api.getActiveUserId(), equals('athlete_uuid_1'));
+    });
+
+    test('Logins user at /api/auth/login and persists access token', () async {
+      String? requestPath;
+      final mockClient = MockClient((request) async {
+        requestPath = request.url.path;
+        if (request.url.path == '/api/auth/login') {
+          return http.Response(
+            jsonEncode({
+              'token': 'jwt_login_token',
+              'refreshToken': 'jwt_refresh_token',
+              'user': {
+                'id': 'athlete_uuid_login',
+                'name': 'Athlete Beta',
+                'email': 'beta@liftlog.test',
+                'avatarUrl': '',
+                'fitnessGoal': 'Build Strength & Muscle',
+                'createdAt': DateTime.now().toIso8601String(),
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      final authService = AuthService(api);
+
+      final user = await authService.login(
+        email: 'beta@liftlog.test',
+        password: 'Password123!',
+      );
+
+      expect(requestPath, equals('/api/auth/login'));
+      expect(user.id, equals('athlete_uuid_login'));
+      expect(await api.getAccessToken(), equals('jwt_login_token'));
+    });
+
+    test('Gets current user at /api/auth/me', () async {
+      String? requestPath;
+      String? authHeader;
+      final mockClient = MockClient((request) async {
+        requestPath = request.url.path;
+        authHeader = request.headers['Authorization'];
+        if (request.url.path == '/api/auth/me') {
+          return http.Response(
+            jsonEncode({
+              'user': {
+                'id': 'athlete_uuid_me',
+                'name': 'Athlete Me',
+                'email': 'me@liftlog.test',
+                'avatarUrl': 'https://example.com/pic.png',
+                'fitnessGoal': 'Weight Loss',
+                'createdAt': DateTime.now().toIso8601String(),
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      await api.setTokens(token: 'existing_valid_token', refreshToken: 'existing_refresh');
+      final authService = AuthService(api);
+
+      final user = await authService.getCurrentUser();
+      expect(requestPath, equals('/api/auth/me'));
+      expect(authHeader, equals('Bearer existing_valid_token'));
+      expect(user, isNotNull);
+      expect(user!.id, equals('athlete_uuid_me'));
+      expect(user.email, equals('me@liftlog.test'));
+    });
+
+    test('Logs out user at /api/auth/logout and clears tokens', () async {
+      String? requestPath;
+      final mockClient = MockClient((request) async {
+        requestPath = request.url.path;
+        return http.Response(jsonEncode({'message': 'Successfully logged out.'}), 200);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      await api.setTokens(token: 'active_token', refreshToken: 'active_refresh', userId: 'user_1');
+      final authService = AuthService(api);
+
+      await authService.logout();
+      expect(requestPath, equals('/api/auth/logout'));
+      expect(await api.getAccessToken(), isNull);
+      expect(await api.getActiveUserId(), isNull);
     });
   });
 

@@ -50,14 +50,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         if (mounted) setState(() => _status = AuthGateStatus.unauthenticated);
       }
     } catch (err) {
-      // If network error occurred but valid token was saved, allow retry
+      // If network error occurred but valid token is saved, keep user logged in
       final token = await ApiClient.instance.getAccessToken();
       if (token != null && token.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _status = AuthGateStatus.unauthenticated;
-          });
-        }
+        if (mounted) setState(() => _status = AuthGateStatus.authenticated);
       } else {
         if (mounted) setState(() => _status = AuthGateStatus.unauthenticated);
       }
