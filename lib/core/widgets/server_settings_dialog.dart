@@ -29,7 +29,7 @@ Future<void> showServerSettingsDialog(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Configure the REST API endpoint (e.g. http://192.168.1.X:5000/api for physical devices or http://localhost:5000/api for simulator):',
+            'Configure the REST API endpoint (default: http://13.140.58.252:22658):',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 14),
@@ -37,7 +37,7 @@ Future<void> showServerSettingsDialog(
             controller: controller,
             style: const TextStyle(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
-              hintText: 'http://localhost:5000/api',
+              hintText: 'http://13.140.58.252:22658',
               hintStyle: const TextStyle(color: AppColors.textMuted),
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.06),

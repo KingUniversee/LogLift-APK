@@ -11,7 +11,7 @@ class AuthService {
     required String password,
   }) async {
     final response = await _api.post(
-      '/auth/register',
+      '/api/auth/register',
       body: {
         'name': name.trim(),
         'email': email.trim().toLowerCase(),
@@ -46,7 +46,7 @@ class AuthService {
     required String password,
   }) async {
     final response = await _api.post(
-      '/auth/login',
+      '/api/auth/login',
       body: {
         'email': email.trim().toLowerCase(),
         'password': password,
@@ -77,7 +77,7 @@ class AuthService {
 
   Future<UserProfile> loginWithGoogle(String idToken) async {
     final response = await _api.post(
-      '/auth/google',
+      '/api/auth/google',
       body: {'idToken': idToken},
       includeAuth: false,
     );
@@ -110,20 +110,25 @@ class AuthService {
     }
 
     try {
-      final response = await _api.get('/auth/me');
+      final response = await _api.get('/api/auth/me');
       if (response is Map<String, dynamic> && response.containsKey('user')) {
         final userMap = Map<String, dynamic>.from(response['user'] as Map);
         return UserProfile.fromMap(userMap);
       }
       return null;
-    } catch (_) {
-      return null;
+    } catch (e) {
+      if (e is UnauthorizedException) {
+        await _api.clearTokens();
+        return null;
+      }
+      // On network or unexpected errors, rethrow so caller handles connection failure
+      rethrow;
     }
   }
 
   Future<void> logout() async {
     try {
-      await _api.post('/auth/logout');
+      await _api.post('/api/auth/logout');
     } catch (_) {
       // Ignored if offline or expired
     } finally {

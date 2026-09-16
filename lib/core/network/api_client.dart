@@ -109,8 +109,25 @@ class ApiClient {
   }
 
   Uri _buildUri(String path, [Map<String, String>? queryParams]) {
-    final cleanPath = path.startsWith('/') ? path : '/$path';
-    final url = '$_baseUrl$cleanPath';
+    var base = _baseUrl.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+
+    var cleanPath = path.startsWith('/') ? path : '/$path';
+
+    // Normalize so that the resolved URL always includes /api exactly once
+    if (base.endsWith('/api')) {
+      if (cleanPath.startsWith('/api/')) {
+        cleanPath = cleanPath.substring(4);
+      }
+    } else {
+      if (!cleanPath.startsWith('/api/') && cleanPath != '/api') {
+        cleanPath = '/api$cleanPath';
+      }
+    }
+
+    final url = '$base$cleanPath';
 
     if (queryParams == null || queryParams.isEmpty) {
       return Uri.parse(url);
@@ -214,7 +231,11 @@ class ApiClient {
     }
 
     // Handle 401 Unauthorized by attempting token refresh
-    if (response.statusCode == 401 && !endpoint.contains('/auth/')) {
+    // Exempt initial credentials endpoints to prevent loops
+    final isAuthEntrypoint = endpoint.endsWith('/auth/login') ||
+        endpoint.endsWith('/auth/register') ||
+        endpoint.endsWith('/auth/refresh');
+    if (response.statusCode == 401 && !isAuthEntrypoint) {
       final refreshed = await _attemptTokenRefresh();
       if (refreshed) {
         try {
@@ -247,7 +268,7 @@ class ApiClient {
         return false;
       }
 
-      final uri = _buildUri('/auth/refresh');
+      final uri = _buildUri('/api/auth/refresh');
       final res = await _httpClient
           .post(
             uri,

@@ -38,16 +38,33 @@ class UserProfile {
         'name': name,
         'email': email,
         'avatar_url': avatarUrl,
+        'avatarUrl': avatarUrl,
         'fitness_goal': fitnessGoal,
+        'fitnessGoal': fitnessGoal,
         'created_at': createdAt.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
       };
 
-  factory UserProfile.fromMap(Map<String, dynamic> map) => UserProfile(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        email: map['email'] as String,
-        avatarUrl: map['avatar_url'] as String? ?? '',
-        fitnessGoal: map['fitness_goal'] as String? ?? 'Build Strength & Muscle',
-        createdAt: DateTime.parse(map['created_at'] as String),
-      );
+  factory UserProfile.fromMap(Map<String, dynamic> map) {
+    final rawDate = map['createdAt'] ?? map['created_at'];
+    DateTime parsedDate;
+    if (rawDate is String) {
+      parsedDate = DateTime.tryParse(rawDate) ?? DateTime.now();
+    } else if (rawDate is DateTime) {
+      parsedDate = rawDate;
+    } else {
+      parsedDate = DateTime.now();
+    }
+
+    return UserProfile(
+      id: (map['id'] ?? map['_id'] ?? '') as String,
+      name: (map['name'] ?? '') as String,
+      email: (map['email'] ?? '') as String,
+      avatarUrl: (map['avatarUrl'] ?? map['avatar_url'] ?? '') as String,
+      fitnessGoal:
+          (map['fitnessGoal'] ?? map['fitness_goal'] ?? 'Build Strength & Muscle')
+              as String,
+      createdAt: parsedDate,
+    );
+  }
 }
