@@ -7,16 +7,58 @@ import '../../data/models/workout_plan.dart';
 import '../../providers/active_workout_provider.dart';
 import 'active_workout_screen.dart';
 
-class StartWorkoutScreen extends ConsumerWidget {
-  const StartWorkoutScreen({required this.plan, super.key});
+class StartWorkoutScreen extends ConsumerStatefulWidget {
+  const StartWorkoutScreen({
+    required this.plan,
+    this.initialDayIndex,
+    super.key,
+  });
 
   final WorkoutPlan plan;
+  final int? initialDayIndex;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StartWorkoutScreen> createState() => _StartWorkoutScreenState();
+}
+
+class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
+  late int _selectedDayIndex;
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _dayFullNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final todayIndex = (DateTime.now().weekday - 1) % 7;
+    if (widget.initialDayIndex != null) {
+      _selectedDayIndex = widget.initialDayIndex!;
+    } else if (widget.plan.daysOfWeek.contains(todayIndex)) {
+      _selectedDayIndex = todayIndex;
+    } else if (widget.plan.daysOfWeek.isNotEmpty) {
+      _selectedDayIndex = widget.plan.daysOfWeek.first;
+    } else {
+      _selectedDayIndex = todayIndex;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final exercises = widget.plan.getExercisesForDay(_selectedDayIndex);
+    final estDuration = widget.plan.estimatedDurationMinutesForDay(_selectedDayIndex);
+    final hasMultipleDays = widget.plan.daysOfWeek.length > 1;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(plan.name),
+        title: Text(widget.plan.name),
       ),
       body: Stack(
         children: [
@@ -32,7 +74,7 @@ class StartWorkoutScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    plan.name,
+                    widget.plan.name,
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
@@ -42,17 +84,57 @@ class StartWorkoutScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Estimated time: ${plan.estimatedDurationMinutes} min · ${plan.exercises.length} exercises',
+                    '${_dayFullNames[_selectedDayIndex]} · Estimated time: ~$estDuration min · ${exercises.length} exercises',
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Day selector chips if plan has multiple scheduled days
+                  if (hasMultipleDays) ...[
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: widget.plan.daysOfWeek.map((day) {
+                          final isSelected = day == _selectedDayIndex;
+                          final exCount = widget.plan.getExercisesForDay(day).length;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              selected: isSelected,
+                              onSelected: (val) {
+                                if (val) setState(() => _selectedDayIndex = day);
+                              },
+                              label: Text('${_dayNames[day]} ($exCount)'),
+                              selectedColor: AppColors.primary,
+                              backgroundColor: AppColors.surfaceGlass,
+                              labelStyle: TextStyle(
+                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: isSelected ? AppColors.primaryLight : AppColors.borderGlass,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Start Workout Primary Button
                   GlassButton(
                     label: 'Start Workout',
                     icon: Icons.play_arrow_rounded,
                     onPressed: () async {
-                      await ref.read(activeWorkoutProvider.notifier).startWorkout(plan: plan);
+                      await ref.read(activeWorkoutProvider.notifier).startWorkout(
+                            plan: widget.plan,
+                            dayIndex: _selectedDayIndex,
+                          );
                       if (context.mounted) {
                         Navigator.of(context).pushReplacement(
                           MaterialPageRoute(builder: (_) => const ActiveWorkoutScreen()),
@@ -62,29 +144,41 @@ class StartWorkoutScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  const Text(
-                    'Exercises',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_dayNames[_selectedDayIndex]} Exercises (${exercises.length})',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
 
                   Expanded(
-                    child: plan.exercises.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No exercises configured in this plan.',
-                              style: TextStyle(color: AppColors.textMuted),
+                    child: exercises.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.bed_rounded, size: 40, color: AppColors.textMuted),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'No exercises scheduled for ${_dayFullNames[_selectedDayIndex]}',
+                                  style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.separated(
-                            itemCount: plan.exercises.length,
+                            itemCount: exercises.length,
                             separatorBuilder: (context, index) => const SizedBox(height: 10),
                             itemBuilder: (context, index) {
-                              final ex = plan.exercises[index];
+                              final ex = exercises[index];
                               return GlassCard(
                                 padding: const EdgeInsets.all(14),
                                 child: Row(
@@ -117,7 +211,7 @@ class StartWorkoutScreen extends ConsumerWidget {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            '${ex.targetSets} sets × ${ex.targetReps} reps',
+                                            ex.targetSummary,
                                             style: const TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 12,

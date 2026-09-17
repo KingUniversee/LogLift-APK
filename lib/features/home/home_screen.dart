@@ -273,12 +273,22 @@ class HomeScreen extends ConsumerWidget {
       );
     }
 
-    final totalSets = plan.exercises.fold<int>(0, (sum, e) => sum + e.targetSets);
+    final todayWeekday = (DateTime.now().weekday - 1) % 7;
+    final todayExercises = plan.getExercisesForDay(todayWeekday);
+    final totalSets = todayExercises.fold<int>(0, (sum, e) => sum + e.targetSets);
+    final estDuration = plan.estimatedDurationMinutesForDay(todayWeekday);
 
     return GlassCard(
       padding: const EdgeInsets.all(22),
       gradient: AppColors.heroCardGradient,
       borderColor: AppColors.borderGlassHighlight,
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => StartWorkoutScreen(plan: plan, initialDayIndex: todayWeekday),
+          ),
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -334,11 +344,11 @@ class HomeScreen extends ConsumerWidget {
           // 3 Metrics Pill Row
           Row(
             children: [
-              _metricPill(context, Icons.format_list_numbered_rounded, '${plan.exercises.length}', 'Exercises'),
+              _metricPill(context, Icons.format_list_numbered_rounded, '${todayExercises.length}', 'Exercises'),
               const SizedBox(width: 10),
               _metricPill(context, Icons.layers_outlined, '$totalSets', 'Sets'),
               const SizedBox(width: 10),
-              _metricPill(context, Icons.timer_outlined, '${plan.estimatedDurationMinutes}m', 'Duration'),
+              _metricPill(context, Icons.timer_outlined, '${estDuration}m', 'Duration'),
             ],
           ),
           const SizedBox(height: 22),
@@ -348,7 +358,9 @@ class HomeScreen extends ConsumerWidget {
             icon: Icons.play_arrow_rounded,
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => StartWorkoutScreen(plan: plan)),
+                MaterialPageRoute(
+                  builder: (_) => StartWorkoutScreen(plan: plan, initialDayIndex: todayWeekday),
+                ),
               );
             },
           ),

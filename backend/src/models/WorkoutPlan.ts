@@ -8,10 +8,12 @@ export interface IPlanExercise {
   exercise_muscle: string;
   exercise_type: string;
   sort_order: number;
+  day_of_week?: number | null;
   target_sets: number;
   target_reps: number;
   target_weight: number;
   target_duration_seconds: number;
+  target_distance_km?: number;
   rest_seconds: number;
 }
 
@@ -36,10 +38,12 @@ const PlanExerciseSchema = new Schema(
     exercise_muscle: { type: String, default: 'fullBody' },
     exercise_type: { type: String, default: 'strength' },
     sort_order: { type: Number, default: 0 },
+    day_of_week: { type: Number, required: false, default: null },
     target_sets: { type: Number, default: 3 },
     target_reps: { type: Number, default: 10 },
     target_weight: { type: Number, default: 0 },
     target_duration_seconds: { type: Number, default: 0 },
+    target_distance_km: { type: Number, default: 0 },
     rest_seconds: { type: Number, default: 60 },
   },
   { _id: false }

@@ -113,7 +113,6 @@ class _LogSetModalState extends State<LogSetModal> {
           autofocus: true,
         );
       case ExerciseType.distance:
-      case ExerciseType.cardio:
         return Row(
           children: [
             Expanded(
@@ -132,6 +131,29 @@ class _LogSetModalState extends State<LogSetModal> {
                 label: 'Duration (sec)',
                 hint: '300',
                 keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        );
+      case ExerciseType.cardio:
+        return Row(
+          children: [
+            Expanded(
+              child: GlassTextField(
+                controller: _durationController,
+                label: 'Duration (sec)',
+                hint: '300',
+                keyboardType: TextInputType.number,
+                autofocus: true,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: GlassTextField(
+                controller: _distanceController,
+                label: 'Distance (km, opt)',
+                hint: '0.0',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
             ),
           ],

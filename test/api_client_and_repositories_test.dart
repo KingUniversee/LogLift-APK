@@ -9,6 +9,7 @@ import 'package:liftlog/data/models/exercise.dart';
 import 'package:liftlog/data/models/personal_record.dart';
 import 'package:liftlog/data/models/workout_session.dart';
 import 'package:liftlog/data/models/user_profile.dart';
+import 'package:liftlog/data/models/workout_plan.dart';
 import 'package:liftlog/data/repositories/user_profile_repository.dart';
 import 'package:liftlog/data/repositories/workout_plan_repository.dart';
 import 'package:liftlog/data/services/auth_service.dart';
@@ -487,6 +488,198 @@ void main() {
       } finally {
         await tempDir.delete(recursive: true);
       }
+    });
+  });
+
+  group('Day-Wise Workout Plan and Exercise Type-Specific Fields Tests', () {
+    test('targetSummary formats duration exercises with sets and duration only (no reps)', () {
+      const ex = PlanExercise(
+        id: 'ex-1',
+        planId: 'plan-1',
+        exerciseId: 'plank',
+        exerciseName: 'Plank',
+        exerciseMuscle: MuscleGroup.core,
+        exerciseType: ExerciseType.duration,
+        sortOrder: 0,
+        targetSets: 3,
+        targetReps: 0,
+        targetDurationSeconds: 60,
+      );
+
+      expect(ex.targetSummary, equals('3 sets × 1m'));
+      expect(ex.targetSummary.contains('reps'), isFalse);
+    });
+
+    test('targetSummary formats cardio / distance exercises with sets, distance, and duration', () {
+      const ex = PlanExercise(
+        id: 'ex-2',
+        planId: 'plan-1',
+        exerciseId: 'treadmill',
+        exerciseName: 'Running',
+        exerciseMuscle: MuscleGroup.cardio,
+        exerciseType: ExerciseType.distance,
+        sortOrder: 1,
+        targetSets: 1,
+        targetReps: 0,
+        targetDistanceKm: 5.0,
+        targetDurationSeconds: 1500,
+      );
+
+      expect(ex.targetSummary, equals('1 sets × 5 km · 25m'));
+      expect(ex.targetSummary.contains('reps'), isFalse);
+    });
+
+    test('targetSummary formats pure cardio exercises with duration only', () {
+      const ex = PlanExercise(
+        id: 'ex-cardio-pure',
+        planId: 'plan-1',
+        exerciseId: 'jump-rope',
+        exerciseName: 'Jump Rope',
+        exerciseMuscle: MuscleGroup.cardio,
+        exerciseType: ExerciseType.cardio,
+        sortOrder: 1,
+        targetSets: 3,
+        targetReps: 0,
+        targetDurationSeconds: 600,
+      );
+
+      expect(ex.targetSummary, equals('3 sets × 10m'));
+      expect(ex.targetSummary.contains('reps'), isFalse);
+      expect(ex.targetSummary.contains('km'), isFalse);
+    });
+
+    test('targetSummary formats strength exercises with sets and reps', () {
+      const ex = PlanExercise(
+        id: 'ex-3',
+        planId: 'plan-1',
+        exerciseId: 'bench-press',
+        exerciseName: 'Bench Press',
+        exerciseMuscle: MuscleGroup.chest,
+        exerciseType: ExerciseType.strength,
+        sortOrder: 0,
+        targetSets: 4,
+        targetReps: 8,
+      );
+
+      expect(ex.targetSummary, equals('4 sets × 8 reps'));
+    });
+
+    test('WorkoutPlan getExercisesForDay isolates exercises per day when dayOfWeek is specified', () {
+      final now = DateTime.now();
+      final plan = WorkoutPlan(
+        id: 'plan-weekly',
+        name: 'Upper / Lower Split',
+        description: 'Monday Upper, Tuesday Lower',
+        daysOfWeek: [0, 1], // Monday = 0, Tuesday = 1
+        createdAt: now,
+        updatedAt: now,
+        exercises: [
+          const PlanExercise(
+            id: 'ex-mon-1',
+            planId: 'plan-weekly',
+            exerciseId: 'chest-press',
+            exerciseName: 'Chest Press',
+            exerciseMuscle: MuscleGroup.chest,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: 0,
+          ),
+          const PlanExercise(
+            id: 'ex-mon-2',
+            planId: 'plan-weekly',
+            exerciseId: 'incline-dumbbell',
+            exerciseName: 'Incline DB',
+            exerciseMuscle: MuscleGroup.chest,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 1,
+            dayOfWeek: 0,
+          ),
+          const PlanExercise(
+            id: 'ex-tue-1',
+            planId: 'plan-weekly',
+            exerciseId: 'squat',
+            exerciseName: 'Barbell Squat',
+            exerciseMuscle: MuscleGroup.legs,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: 1,
+          ),
+        ],
+      );
+
+      expect(plan.hasDayWiseConfiguration, isTrue);
+
+      final mondayExercises = plan.getExercisesForDay(0);
+      expect(mondayExercises.length, equals(2));
+      expect(mondayExercises[0].exerciseName, equals('Chest Press'));
+      expect(mondayExercises[1].exerciseName, equals('Incline DB'));
+
+      final tuesdayExercises = plan.getExercisesForDay(1);
+      expect(tuesdayExercises.length, equals(1));
+      expect(tuesdayExercises[0].exerciseName, equals('Barbell Squat'));
+
+      final wednesdayExercises = plan.getExercisesForDay(2);
+      expect(wednesdayExercises.isEmpty, isTrue);
+    });
+
+    test('WorkoutPlan getExercisesForDay falls back to all exercises for legacy plans without day tags', () {
+      final now = DateTime.now();
+      final legacyPlan = WorkoutPlan(
+        id: 'plan-legacy',
+        name: 'Legacy 3-Day Plan',
+        description: '',
+        daysOfWeek: [0, 2, 4],
+        createdAt: now,
+        updatedAt: now,
+        exercises: [
+          const PlanExercise(
+            id: 'ex-1',
+            planId: 'plan-legacy',
+            exerciseId: 'squat',
+            exerciseName: 'Squat',
+            exerciseMuscle: MuscleGroup.legs,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: null,
+          ),
+        ],
+      );
+
+      expect(legacyPlan.hasDayWiseConfiguration, isFalse);
+
+      final monExercises = legacyPlan.getExercisesForDay(0);
+      expect(monExercises.length, equals(1));
+      expect(monExercises[0].exerciseName, equals('Squat'));
+
+      final restExercises = legacyPlan.getExercisesForDay(1);
+      expect(restExercises.isEmpty, isTrue);
+    });
+
+    test('PlanExercise toMap and fromMap preserve dayOfWeek and targetDistanceKm', () {
+      const original = PlanExercise(
+        id: 'ex-roundtrip',
+        planId: 'plan-1',
+        exerciseId: 'run',
+        exerciseName: 'Running',
+        exerciseMuscle: MuscleGroup.cardio,
+        exerciseType: ExerciseType.distance,
+        sortOrder: 2,
+        dayOfWeek: 3,
+        targetSets: 1,
+        targetReps: 0,
+        targetDurationSeconds: 1200,
+        targetDistanceKm: 3.5,
+      );
+
+      final map = original.toMap();
+      expect(map['day_of_week'], equals(3));
+      expect(map['target_distance_km'], equals(3.5));
+
+      final restored = PlanExercise.fromMap(map);
+      expect(restored.id, equals(original.id));
+      expect(restored.dayOfWeek, equals(3));
+      expect(restored.targetDistanceKm, equals(3.5));
+      expect(restored.targetDurationSeconds, equals(1200));
     });
   });
 }

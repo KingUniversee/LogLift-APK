@@ -164,14 +164,16 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
                         ),
                       ),
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                         icon: Container(
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
                             border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
                           ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
                         ),
                         tooltip: 'Create Workout Plan',
                         onPressed: () {

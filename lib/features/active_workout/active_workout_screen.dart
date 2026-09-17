@@ -368,11 +368,29 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ],
         );
       case ExerciseType.distance:
-      case ExerciseType.cardio:
         return const Row(
           children: [
             SizedBox(width: 32, child: Text('SET', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
             Expanded(child: Center(child: Text('KM', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+            Expanded(child: Center(child: Text('TIME', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+            SizedBox(width: 48, child: Center(child: Text('DONE', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+          ],
+        );
+      case ExerciseType.cardio:
+        final hasDistance = log.sets.any((s) => s.distanceKm > 0);
+        if (hasDistance) {
+          return const Row(
+            children: [
+              SizedBox(width: 32, child: Text('SET', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+              Expanded(child: Center(child: Text('KM', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+              Expanded(child: Center(child: Text('TIME', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+              SizedBox(width: 48, child: Center(child: Text('DONE', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
+            ],
+          );
+        }
+        return const Row(
+          children: [
+            SizedBox(width: 32, child: Text('SET', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
             Expanded(child: Center(child: Text('TIME', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
             SizedBox(width: 48, child: Center(child: Text('DONE', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)))),
           ],
@@ -440,7 +458,6 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         ];
         break;
       case ExerciseType.distance:
-      case ExerciseType.cardio:
         inputButtons = [
           Expanded(
             child: InkWell(
@@ -482,6 +499,73 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             ),
           ),
         ];
+        break;
+      case ExerciseType.cardio:
+        final hasDistance = log.sets.any((s) => s.distanceKm > 0);
+        if (hasDistance) {
+          inputButtons = [
+            Expanded(
+              child: InkWell(
+                onTap: () => _openSetEditModal(log, set),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      set.distanceKm > 0
+                          ? '${set.distanceKm.toStringAsFixed(set.distanceKm.truncateToDouble() == set.distanceKm ? 0 : 2)} km'
+                          : '-',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: InkWell(
+                onTap: () => _openSetEditModal(log, set),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      set.durationSeconds > 0 ? '${set.durationSeconds}s' : '-',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ];
+        } else {
+          inputButtons = [
+            Expanded(
+              child: InkWell(
+                onTap: () => _openSetEditModal(log, set),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      set.durationSeconds > 0 ? '${set.durationSeconds}s' : '-',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ];
+        }
         break;
       case ExerciseType.strength:
       case ExerciseType.weightAndReps:

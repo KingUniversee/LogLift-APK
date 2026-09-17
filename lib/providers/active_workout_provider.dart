@@ -94,6 +94,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
 
   Future<void> startWorkout({
     WorkoutPlan? plan,
+    int? dayIndex,
     String? customTitle,
     List<Exercise> exercises = const [],
   }) async {
@@ -103,16 +104,22 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
     final exerciseLogs = <ExerciseLog>[];
 
     if (plan != null) {
-      for (var i = 0; i < plan.exercises.length; i++) {
-        final planEx = plan.exercises[i];
+      final targetDay = dayIndex ?? (now.weekday - 1);
+      final exercisesToLoad = plan.getExercisesForDay(targetDay);
+
+      for (var i = 0; i < exercisesToLoad.length; i++) {
+        final planEx = exercisesToLoad[i];
         final logId = const Uuid().v4();
         final sets = List.generate(planEx.targetSets, (idx) {
+          final isDuration = planEx.exerciseType == ExerciseType.duration;
           return SetLog(
             id: const Uuid().v4(),
             exerciseLogId: logId,
             setNumber: idx + 1,
             weightKg: planEx.targetWeight,
-            reps: planEx.targetReps,
+            reps: isDuration ? 0 : planEx.targetReps,
+            durationSeconds: planEx.targetDurationSeconds,
+            distanceKm: planEx.targetDistanceKm,
             completed: false,
           );
         });
@@ -131,6 +138,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
       for (var i = 0; i < exercises.length; i++) {
         final ex = exercises[i];
         final logId = const Uuid().v4();
+        final isDuration = ex.exerciseType == ExerciseType.duration || ex.exerciseType == ExerciseType.cardio;
         exerciseLogs.add(ExerciseLog(
           id: logId,
           sessionId: sessionId,
@@ -144,7 +152,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
               exerciseLogId: logId,
               setNumber: 1,
               weightKg: 0,
-              reps: 10,
+              reps: isDuration ? 0 : 10,
+              durationSeconds: isDuration ? 60 : 0,
               completed: false,
             ),
           ],
@@ -180,6 +189,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
   Future<void> addExercise(Exercise exercise) async {
     if (state.session == null) return;
     final logId = const Uuid().v4();
+    final isDuration = exercise.exerciseType == ExerciseType.duration || exercise.exerciseType == ExerciseType.cardio;
     final newLog = ExerciseLog(
       id: logId,
       sessionId: state.session!.id,
@@ -193,7 +203,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
           exerciseLogId: logId,
           setNumber: 1,
           weightKg: 0,
-          reps: 10,
+          reps: isDuration ? 0 : 10,
+          durationSeconds: isDuration ? 60 : 0,
           completed: false,
         ),
       ],
@@ -212,13 +223,16 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
     if (state.session == null) return;
     final logs = state.session!.logs.map((log) {
       if (log.id == exerciseLogId) {
+        final isDuration = log.exerciseType == ExerciseType.duration || log.exerciseType == ExerciseType.cardio;
         final lastSet = log.sets.isNotEmpty ? log.sets.last : null;
         final newSet = SetLog(
           id: const Uuid().v4(),
           exerciseLogId: log.id,
           setNumber: log.sets.length + 1,
           weightKg: lastSet?.weightKg ?? 0.0,
-          reps: lastSet?.reps ?? 10,
+          reps: isDuration ? 0 : (lastSet?.reps ?? 10),
+          durationSeconds: lastSet?.durationSeconds ?? (isDuration ? 60 : 0),
+          distanceKm: lastSet?.distanceKm ?? 0.0,
           completed: false,
         );
         return log.copyWith(sets: [...log.sets, newSet]);

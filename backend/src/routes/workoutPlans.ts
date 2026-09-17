@@ -58,10 +58,12 @@ workoutPlansRouter.post('/', async (req: Request, res: Response) => {
       exercise_muscle: e.exercise_muscle || 'fullBody',
       exercise_type: e.exercise_type || 'strength',
       sort_order: e.sort_order ?? idx,
+      day_of_week: e.day_of_week !== undefined ? e.day_of_week : null,
       target_sets: e.target_sets ?? 3,
       target_reps: e.target_reps ?? 10,
       target_weight: e.target_weight ?? 0,
       target_duration_seconds: e.target_duration_seconds ?? 0,
+      target_distance_km: e.target_distance_km ?? 0,
       rest_seconds: e.rest_seconds ?? 60,
     }));
 
@@ -103,10 +105,12 @@ workoutPlansRouter.put('/:id', async (req: Request, res: Response) => {
       exercise_muscle: e.exercise_muscle || 'fullBody',
       exercise_type: e.exercise_type || 'strength',
       sort_order: e.sort_order ?? idx,
+      day_of_week: e.day_of_week !== undefined ? e.day_of_week : null,
       target_sets: e.target_sets ?? 3,
       target_reps: e.target_reps ?? 10,
       target_weight: e.target_weight ?? 0,
       target_duration_seconds: e.target_duration_seconds ?? 0,
+      target_distance_km: e.target_distance_km ?? 0,
       rest_seconds: e.rest_seconds ?? 60,
     }));
 
