@@ -148,7 +148,7 @@ JWT_SECRET=generate_a_strong_random_secret_string_here_32_chars_min
 JWT_REFRESH_SECRET=generate_another_strong_random_secret_string_here
 
 # Google OAuth Web Client ID
-GOOGLE_CLIENT_ID=920575978481-a1o52s4mkkoep0te6a8jnho2ves5iqos.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=920575978481-6ss9gbv10qu2dlo4888fcu0nu75iktv5.apps.googleusercontent.com
 ```
 
 ### Install Dependencies & Build
@@ -181,32 +181,31 @@ npm test
 
 ---
 
-## 3. Google OAuth & Apple Sign In Configuration
+## 3. Google OAuth Configuration
 
 ### Google OAuth Configuration
 
-The Google OAuth client ID configured for this application is:
-```text
-920575978481-a1o52s4mkkoep0te6a8jnho2ves5iqos.apps.googleusercontent.com
-```
+The Google OAuth client IDs configured for this application are:
+
+- **Web Client ID (serverClientId & Backend Token Audience):**
+  ```text
+  920575978481-6ss9gbv10qu2dlo4888fcu0nu75iktv5.apps.googleusercontent.com
+  ```
+- **Android OAuth Client ID:**
+  ```text
+  920575978481-snf8lhc8o7sel63he5c4futmlfhe7e1u.apps.googleusercontent.com
+  ```
+  - Package Name: `com.example.liftlog`
+  - Debug SHA-1: `32:BB:51:BF:A6:05:FF:CB:FA:40:D9:A5:01:82:1E:6E:45:4D:A4:95`
 
 - **Backend (`/api/auth/google`)**:
   - Uses `google-auth-library` (`OAuth2Client`).
-  - Verifies the integrity and audience of the incoming Google ID token.
+  - Verifies the integrity and audience of the incoming Google ID token (`920575978481-6ss9gbv10qu2dlo4888fcu0nu75iktv5.apps.googleusercontent.com`).
   - Automatically provisions or matches the user in MongoDB Atlas and signs a secure JWT session.
-- **Flutter iOS / Android Client**:
-  - Configure Google Cloud Console credentials for iOS (Bundle ID: `com.liftlog.app`) and Android (SHA-1 fingerprint).
-  - Add the reversed client ID URL scheme to `ios/Runner/Info.plist`.
-
-### Apple Sign In Configuration
-
-Apple Sign In is reserved for a future release:
-- The endpoint `POST /api/auth/apple` responds with `501 Not Implemented`.
-- The Flutter client UI displays a notification stating that Apple Sign In will be available in an upcoming update.
-- To activate Apple Sign In in the future:
-  1. Enable Apple Sign In under the App ID in the Apple Developer Portal.
-  2. Create a Services ID and Private Key (.p8).
-  3. Verify identity tokens with `apple-signin-auth` in `backend/src/routes/auth.ts`.
+- **Flutter Client**:
+  - Uses `GoogleSignIn(serverClientId: ApiConfig.googleClientId)` where `ApiConfig.googleClientId` points to the Web Client ID.
+  - Google Play Services automatically resolves the Android client using the app's package name and debug keystore SHA-1.
+  - iOS configuration is maintained separately and remains untouched.
 
 ---
 
@@ -232,7 +231,6 @@ Apple Sign In is reserved for a future release:
 - `POST /api/auth/register`: Create user account with `{ name, email, password }`.
 - `POST /api/auth/login`: Authenticate with `{ email, password }`.
 - `POST /api/auth/google`: Sign in with Google ID token `{ idToken }`.
-- `POST /api/auth/apple`: Placeholder for future Apple Sign In.
 - `GET /api/auth/me`: Get current authenticated user profile.
 - `POST /api/auth/refresh`: Refresh JWT using `{ refreshToken }`.
 - `POST /api/auth/logout`: Revoke active session refresh token.

@@ -126,14 +126,17 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
     final plansAsync = ref.watch(workoutPlansProvider);
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CreateWorkoutPlanScreen()),
-          );
-        },
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 72),
+        child: FloatingActionButton(
+          backgroundColor: AppColors.primary,
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateWorkoutPlanScreen()),
+            );
+          },
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        ),
       ),
       body: Stack(
         children: [
@@ -148,14 +151,36 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Workouts',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Workouts',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                          ),
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                        ),
+                        tooltip: 'Create Workout Plan',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const CreateWorkoutPlanScreen()),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
 

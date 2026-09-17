@@ -84,17 +84,6 @@ class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
     }
   }
 
-  Future<void> loginWithGoogle(String idToken) async {
-    state = const AsyncLoading();
-    try {
-      final user = await ref.read(authServiceProvider).loginWithGoogle(idToken);
-      state = AsyncData(user);
-    } catch (e, st) {
-      state = AsyncError(e, st);
-      rethrow;
-    }
-  }
-
   Future<void> logout() async {
     await ref.read(authServiceProvider).logout();
     state = const AsyncData(null);

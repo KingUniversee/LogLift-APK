@@ -25,6 +25,7 @@ settingsRouter.get('/', async (req: Request, res: Response) => {
         default_rest_seconds: 60,
         notifications_enabled: 1,
         reminders_enabled: 1,
+        haptics_enabled: 1,
       });
     }
     res.json(settings.toJSON());
@@ -49,6 +50,7 @@ settingsRouter.put('/', async (req: Request, res: Response) => {
         default_rest_seconds: data.default_rest_seconds ?? 60,
         notifications_enabled: data.notifications_enabled ?? 1,
         reminders_enabled: data.reminders_enabled ?? 1,
+        haptics_enabled: data.haptics_enabled ?? 1,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );

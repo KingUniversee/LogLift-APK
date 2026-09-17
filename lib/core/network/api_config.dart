@@ -48,8 +48,4 @@ class ApiConfig {
 
     return productionBaseUrl;
   }
-
-  // Google OAuth Web Client ID for LiftLog
-  static const String googleClientId =
-      '920575978481-a1o52s4mkkoep0te6a8jnho2ves5iqos.apps.googleusercontent.com';
 }

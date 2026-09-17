@@ -324,15 +324,20 @@ class ApiClient {
       return decoded;
     }
 
-    if (response.statusCode == 401) {
-      throw const UnauthorizedException();
-    }
-
     String message = 'API Error (${response.statusCode})';
     if (decoded is Map<String, dynamic> && decoded.containsKey('error')) {
       message = decoded['error'].toString();
     } else if (decoded is String && decoded.isNotEmpty) {
       message = decoded;
+    }
+
+    if (response.statusCode == 401) {
+      if (decoded is Map<String, dynamic> && decoded.containsKey('error')) {
+        throw UnauthorizedException(
+          message: decoded['error'].toString(),
+        );
+      }
+      throw const UnauthorizedException();
     }
 
     throw ApiException(

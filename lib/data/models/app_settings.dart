@@ -10,6 +10,7 @@ class AppSettings {
     this.defaultRestSeconds = 60,
     this.notificationsEnabled = true,
     this.remindersEnabled = true,
+    this.hapticsEnabled = true,
   });
 
   final AppAppearance appearance;
@@ -18,6 +19,7 @@ class AppSettings {
   final int defaultRestSeconds;
   final bool notificationsEnabled;
   final bool remindersEnabled;
+  final bool hapticsEnabled;
 
   AppSettings copyWith({
     AppAppearance? appearance,
@@ -26,6 +28,7 @@ class AppSettings {
     int? defaultRestSeconds,
     bool? notificationsEnabled,
     bool? remindersEnabled,
+    bool? hapticsEnabled,
   }) {
     return AppSettings(
       appearance: appearance ?? this.appearance,
@@ -34,6 +37,7 @@ class AppSettings {
       defaultRestSeconds: defaultRestSeconds ?? this.defaultRestSeconds,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       remindersEnabled: remindersEnabled ?? this.remindersEnabled,
+      hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
     );
   }
 
@@ -45,6 +49,7 @@ class AppSettings {
         'default_rest_seconds': defaultRestSeconds,
         'notifications_enabled': notificationsEnabled ? 1 : 0,
         'reminders_enabled': remindersEnabled ? 1 : 0,
+        'haptics_enabled': hapticsEnabled ? 1 : 0,
       };
 
   factory AppSettings.fromMap(Map<String, dynamic> map) => AppSettings(
@@ -63,5 +68,6 @@ class AppSettings {
         defaultRestSeconds: map['default_rest_seconds'] as int? ?? 60,
         notificationsEnabled: (map['notifications_enabled'] as int? ?? 1) == 1,
         remindersEnabled: (map['reminders_enabled'] as int? ?? 1) == 1,
+        hapticsEnabled: (map['haptics_enabled'] as int? ?? 1) == 1,
       );
 }

@@ -37,7 +37,7 @@ class SetLog {
   final bool completed;
   final String notes;
 
-  double get volume => completed ? (weightKg * reps) : 0;
+  double get volume => (completed && weightKg > 0 && reps > 0) ? (weightKg * reps) : 0.0;
 
   SetLog copyWith({
     String? id,
@@ -109,7 +109,15 @@ class ExerciseLog {
 
   int get completedSets => sets.where((s) => s.completed).length;
   int get totalReps => sets.where((s) => s.completed).fold(0, (sum, s) => sum + s.reps);
-  double get totalVolume => sets.where((s) => s.completed).fold(0.0, (sum, s) => sum + s.volume);
+  double get totalVolume {
+    if (exerciseType == ExerciseType.duration ||
+        exerciseType == ExerciseType.distance ||
+        exerciseType == ExerciseType.cardio ||
+        exerciseType == ExerciseType.repsOnly) {
+      return 0.0;
+    }
+    return sets.where((s) => s.completed).fold(0.0, (sum, s) => sum + s.volume);
+  }
   double get maxWeight => sets.where((s) => s.completed).fold(0.0, (max, s) => s.weightKg > max ? s.weightKg : max);
 
   ExerciseLog copyWith({

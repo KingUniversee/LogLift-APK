@@ -18,6 +18,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
@@ -175,7 +176,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       label: 'Password',
                       hint: 'At least 6 characters',
                       prefixIcon: Icons.lock_outline_rounded,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: AppColors.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
                     ),
                     const SizedBox(height: 32),
 

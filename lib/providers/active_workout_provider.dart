@@ -6,6 +6,7 @@ import '../data/models/exercise.dart';
 import '../data/models/personal_record.dart';
 import '../data/models/workout_plan.dart';
 import '../data/models/workout_session.dart';
+import '../core/services/notification_service.dart';
 import 'app_providers.dart';
 
 class ActiveWorkoutState {
@@ -17,6 +18,8 @@ class ActiveWorkoutState {
     this.isRestTimerRunning = false,
     this.elapsedSeconds = 0,
     this.lastDetectedPRs = const [],
+    this.restTimerTargetEndTime,
+    this.hasCompletedAlertFired = false,
   });
 
   final WorkoutSession? session;
@@ -26,6 +29,8 @@ class ActiveWorkoutState {
   final bool isRestTimerRunning;
   final int elapsedSeconds;
   final List<PersonalRecord> lastDetectedPRs;
+  final DateTime? restTimerTargetEndTime;
+  final bool hasCompletedAlertFired;
 
   bool get hasActiveWorkout => session != null && session!.status == WorkoutStatus.inProgress;
 
@@ -45,6 +50,8 @@ class ActiveWorkoutState {
     bool? isRestTimerRunning,
     int? elapsedSeconds,
     List<PersonalRecord>? lastDetectedPRs,
+    DateTime? Function()? restTimerTargetEndTime,
+    bool? hasCompletedAlertFired,
   }) {
     return ActiveWorkoutState(
       session: session != null ? session() : this.session,
@@ -54,6 +61,10 @@ class ActiveWorkoutState {
       isRestTimerRunning: isRestTimerRunning ?? this.isRestTimerRunning,
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       lastDetectedPRs: lastDetectedPRs ?? this.lastDetectedPRs,
+      restTimerTargetEndTime: restTimerTargetEndTime != null
+          ? restTimerTargetEndTime()
+          : this.restTimerTargetEndTime,
+      hasCompletedAlertFired: hasCompletedAlertFired ?? this.hasCompletedAlertFired,
     );
   }
 }
@@ -278,8 +289,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
     await ref.read(sessionRepoProvider).saveSession(updated);
 
     if (justCompleted) {
-      HapticFeedback.mediumImpact();
       final settings = ref.read(settingsProvider).value;
+      if (settings?.hapticsEnabled ?? true) {
+        HapticFeedback.mediumImpact();
+      }
       final restSec = settings?.defaultRestSeconds ?? 60;
       if (restSec > 0) {
         startRestTimer(restSec);
@@ -306,23 +319,41 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
   }
 
   void startRestTimer(int seconds) {
+    final now = DateTime.now();
+    final targetEndTime = now.add(Duration(seconds: seconds));
+    final settings = ref.read(settingsProvider).value;
+
+    if (settings?.notificationsEnabled ?? true) {
+      NotificationService.instance.scheduleRestTimerNotification(
+        scheduledEndTime: targetEndTime,
+        title: 'Rest Finished!',
+        body: 'Time to begin your next set.',
+      );
+    }
+
     state = state.copyWith(
       restSecondsRemaining: seconds,
       initialRestSeconds: seconds,
       isRestTimerRunning: true,
+      restTimerTargetEndTime: () => targetEndTime,
+      hasCompletedAlertFired: false,
     );
   }
 
   void stopRestTimer() {
+    NotificationService.instance.cancelRestTimerNotification();
     state = state.copyWith(
       restSecondsRemaining: 0,
       isRestTimerRunning: false,
+      restTimerTargetEndTime: () => null,
+      hasCompletedAlertFired: true,
     );
   }
 
   Future<WorkoutSession?> finishWorkout() async {
     if (state.session == null) return null;
     _ticker?.cancel();
+    NotificationService.instance.cancelRestTimerNotification();
 
     final now = DateTime.now();
     final duration = now.difference(state.session!.startedAt).inSeconds;
@@ -343,6 +374,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
       session: () => null,
       isRestTimerRunning: false,
       restSecondsRemaining: 0,
+      restTimerTargetEndTime: () => null,
+      hasCompletedAlertFired: true,
       lastDetectedPRs: prs,
     );
 
@@ -358,32 +391,62 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
   Future<void> cancelWorkout() async {
     if (state.session == null) return;
     _ticker?.cancel();
+    NotificationService.instance.cancelRestTimerNotification();
     await ref.read(sessionRepoProvider).deleteSession(state.session!.id);
     state = const ActiveWorkoutState();
+  }
+
+  void syncOnResume() {
+    _syncTimers();
+  }
+
+  void _syncTimers() {
+    final session = state.session;
+    final int newElapsed = session != null
+        ? DateTime.now().difference(session.startedAt).inSeconds
+        : state.elapsedSeconds + 1;
+
+    var timerRunning = state.isRestTimerRunning;
+    var newRest = state.restSecondsRemaining;
+    var alertFired = state.hasCompletedAlertFired;
+    final targetEnd = state.restTimerTargetEndTime;
+
+    if (timerRunning && targetEnd != null) {
+      final diff = targetEnd.difference(DateTime.now()).inSeconds;
+      if (diff > 0) {
+        newRest = diff;
+      } else {
+        newRest = 0;
+        timerRunning = false;
+        if (!alertFired) {
+          alertFired = true;
+          final settings = ref.read(settingsProvider).value;
+          if (settings?.hapticsEnabled ?? true) {
+            HapticFeedback.heavyImpact();
+          }
+          if (settings?.notificationsEnabled ?? true) {
+            NotificationService.instance.showRestTimerCompletedNotification(
+              title: 'Rest Finished!',
+              body: 'Time to begin your next set.',
+            );
+          }
+        }
+      }
+    }
+
+    state = state.copyWith(
+      elapsedSeconds: newElapsed > 0 ? newElapsed : 0,
+      restSecondsRemaining: newRest,
+      isRestTimerRunning: timerRunning,
+      hasCompletedAlertFired: alertFired,
+      restTimerTargetEndTime: timerRunning ? () => targetEnd : () => null,
+    );
   }
 
   void _startTicker() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      final newElapsed = state.elapsedSeconds + 1;
-      var newRest = state.restSecondsRemaining;
-      var timerRunning = state.isRestTimerRunning;
-
-      if (timerRunning) {
-        if (newRest > 1) {
-          newRest--;
-        } else {
-          newRest = 0;
-          timerRunning = false;
-          HapticFeedback.heavyImpact();
-        }
-      }
-
-      state = state.copyWith(
-        elapsedSeconds: newElapsed,
-        restSecondsRemaining: newRest,
-        isRestTimerRunning: timerRunning,
-      );
+      _syncTimers();
     });
   }
 }

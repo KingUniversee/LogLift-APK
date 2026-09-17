@@ -9,6 +9,7 @@ export interface IAppSettings extends Document {
   default_rest_seconds: number;
   notifications_enabled: number;
   reminders_enabled: number;
+  haptics_enabled: number;
 }
 
 const AppSettingsSchema: Schema = new Schema(
@@ -21,6 +22,7 @@ const AppSettingsSchema: Schema = new Schema(
     default_rest_seconds: { type: Number, default: 60 },
     notifications_enabled: { type: Number, default: 1 },
     reminders_enabled: { type: Number, default: 1 },
+    haptics_enabled: { type: Number, default: 1 },
   },
   {
     timestamps: false,

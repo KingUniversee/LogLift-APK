@@ -335,6 +335,59 @@ void main() {
       expect(session.completedSets, equals(2));
     });
 
+    test('Duration, cardio, distance, and repsOnly exercises have 0.0 volume', () {
+      final session = WorkoutSession(
+        id: 'sess_cardio',
+        planName: 'Cardio & Core',
+        startedAt: DateTime.now(),
+        logs: [
+          ExerciseLog(
+            id: 'log_plank',
+            sessionId: 'sess_cardio',
+            exerciseId: 'plank',
+            exerciseName: 'Plank',
+            exerciseType: ExerciseType.duration,
+            sortOrder: 0,
+            sets: const [
+              SetLog(
+                id: 's1',
+                exerciseLogId: 'log_plank',
+                setNumber: 1,
+                weightKg: 55, // e.g. duration stored or mistakenly passed
+                reps: 15,
+                durationSeconds: 60,
+                completed: true,
+              ),
+            ],
+          ),
+          ExerciseLog(
+            id: 'log_run',
+            sessionId: 'sess_cardio',
+            exerciseId: 'treadmill',
+            exerciseName: 'Treadmill Run',
+            exerciseType: ExerciseType.cardio,
+            sortOrder: 1,
+            sets: const [
+              SetLog(
+                id: 's2',
+                exerciseLogId: 'log_run',
+                setNumber: 1,
+                weightKg: 20,
+                reps: 5,
+                distanceKm: 3.0,
+                completed: true,
+              ),
+            ],
+          ),
+        ],
+      );
+
+      // Volume must strictly be 0.0 for duration and cardio, avoiding the 825 kg bug
+      expect(session.logs[0].totalVolume, equals(0.0));
+      expect(session.logs[1].totalVolume, equals(0.0));
+      expect(session.totalVolume, equals(0.0));
+    });
+
     test('PersonalRecord serializes and parses properly', () {
       final pr = PersonalRecord(
         id: 'pr_1',

@@ -8,6 +8,7 @@ import 'package:liftlog/data/models/user_profile.dart';
 import 'package:liftlog/data/models/workout_plan.dart';
 import 'package:liftlog/data/models/workout_session.dart';
 import 'package:liftlog/data/repositories/workout_session_repository.dart';
+import 'package:liftlog/features/auth/login_screen.dart';
 import 'package:liftlog/features/shell/main_shell.dart';
 import 'package:liftlog/main.dart';
 import 'package:liftlog/providers/app_providers.dart';
@@ -74,6 +75,60 @@ void main() {
     expect(find.text('History'), findsOneWidget);
     expect(find.text('Progress'), findsOneWidget);
     expect(find.text('Reports'), findsOneWidget);
+  });
+
+  testWidgets('LoginScreen renders and scrolls without overflow in both keyboard-closed and keyboard-open states', (WidgetTester tester) async {
+    // Typical mobile screen resolution
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userProfileProvider.overrideWith(() => _MockUserProfileNotifier()),
+        ],
+        child: const MaterialApp(
+          home: LoginScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Keyboard-closed state
+    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsNothing);
+    expect(
+      find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().contains('Sign Up')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    // 2. Simulate opening the soft keyboard (simulating bottom insets of 350 logical pixels = 700 physical pixels)
+    tester.view.viewInsets = const FakeViewPadding(bottom: 700);
+    await tester.pumpAndSettle();
+
+    // Verify all key elements remain functional and no overflow error occurred
+    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // Verify it scrolls smoothly when dragging
+    await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().contains('Sign Up')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    // 3. Close the keyboard
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }
 

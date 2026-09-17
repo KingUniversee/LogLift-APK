@@ -1,28 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/network/api_config.dart';
 import '../../core/widgets/glass_card.dart';
-import '../../core/widgets/server_settings_dialog.dart';
 import '../../data/models/app_settings.dart';
 import '../../providers/app_providers.dart';
 import '../auth/login_screen.dart';
 import '../personal_records/personal_records_screen.dart';
 import '../statistics/statistics_screen.dart';
+import 'edit_profile_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
-
-  Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
-    final json = await ref.read(settingsRepoProvider).exportAllDataAsJson();
-    await Clipboard.setData(ClipboardData(text: json));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Database backup copied to clipboard!')),
-      );
-    }
-  }
 
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -77,6 +65,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(settingsProvider);
     final profileAsync = ref.watch(userProfileProvider);
+    final profile = profileAsync.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -103,9 +92,18 @@ class SettingsScreen extends ConsumerWidget {
                         height: 54,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: AppColors.accentGlowGradient,
+                          gradient: (profile?.avatarUrl.isNotEmpty == true) ? null : AppColors.accentGlowGradient,
+                          border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4), width: 1.5),
                         ),
-                        child: const Icon(Icons.person, color: Colors.black, size: 28),
+                        child: ClipOval(
+                          child: (profile?.avatarUrl.isNotEmpty == true)
+                              ? Image.network(
+                                  profile!.avatarUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.person, color: Colors.white, size: 28),
+                                )
+                              : const Icon(Icons.person, color: Colors.black, size: 28),
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -113,23 +111,34 @@ class SettingsScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              profileAsync.value?.name.isNotEmpty == true ? profileAsync.value!.name : 'Fitness Enthusiast',
+                              profile?.name.isNotEmpty == true ? profile!.name : 'Fitness Enthusiast',
                               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Colors.white),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              profileAsync.value?.email.isNotEmpty == true ? profileAsync.value!.email : 'Signed in via Cloud Account',
+                              profile?.email.isNotEmpty == true ? profile!.email : 'Signed in via Cloud Account',
                               style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                             ),
                           ],
                         ),
                       ),
-                      if (profileAsync.value != null)
+                      if (profile != null) ...[
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, color: AppColors.primaryLight),
+                          tooltip: 'Edit Profile',
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => EditProfileDialog(profile: profile),
+                            );
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.logout_rounded, color: AppColors.accentRose),
                           tooltip: 'Sign Out',
                           onPressed: () => _handleLogout(context, ref),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -241,9 +250,39 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                           const Divider(height: 1, color: Colors.white10),
 
-                          // Workout Reminders
+                          // Rest Timer Notifications
                           SwitchListTile(
                             secondary: const Icon(Icons.notifications_active_outlined, color: Colors.white70),
+                            title: const Text('Rest Timer Notifications', style: TextStyle(color: Colors.white, fontSize: 15)),
+                            subtitle: const Text('Alert when rest timer reaches zero', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                            value: settings.notificationsEnabled,
+                            activeThumbColor: AppColors.primaryLight,
+                            onChanged: (val) {
+                              ref.read(settingsProvider.notifier).updateSettings(
+                                    settings.copyWith(notificationsEnabled: val),
+                                  );
+                            },
+                          ),
+                          const Divider(height: 1, color: Colors.white10),
+
+                          // Haptic Feedback
+                          SwitchListTile(
+                            secondary: const Icon(Icons.vibration_rounded, color: Colors.white70),
+                            title: const Text('Haptic Feedback', style: TextStyle(color: Colors.white, fontSize: 15)),
+                            subtitle: const Text('Vibrate on set completion & timer end', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                            value: settings.hapticsEnabled,
+                            activeThumbColor: AppColors.primaryLight,
+                            onChanged: (val) {
+                              ref.read(settingsProvider.notifier).updateSettings(
+                                    settings.copyWith(hapticsEnabled: val),
+                                  );
+                            },
+                          ),
+                          const Divider(height: 1, color: Colors.white10),
+
+                          // Workout Reminders
+                          SwitchListTile(
+                            secondary: const Icon(Icons.alarm_rounded, color: Colors.white70),
                             title: const Text('Workout Reminders', style: TextStyle(color: Colors.white, fontSize: 15)),
                             value: settings.remindersEnabled,
                             activeThumbColor: AppColors.primaryLight,
@@ -262,28 +301,13 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Account & Data Management
-                const Text('Account & Data', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textSecondary, fontSize: 13)),
+                // Account
+                const Text('Account', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textSecondary, fontSize: 13)),
                 const SizedBox(height: 10),
                 GlassCard(
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
-                      ListTile(
-                        leading: const Icon(Icons.dns_outlined, color: AppColors.accentCyan),
-                        title: const Text('Server Connection', style: TextStyle(color: Colors.white, fontSize: 15)),
-                        subtitle: Text(ApiConfig.baseUrl, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-                        onTap: () => showServerSettingsDialog(context),
-                      ),
-                      const Divider(height: 1, color: Colors.white10),
-                      ListTile(
-                        leading: const Icon(Icons.file_download_outlined, color: AppColors.primaryLight),
-                        title: const Text('Export Backup (JSON)', style: TextStyle(color: Colors.white, fontSize: 15)),
-                        subtitle: const Text('Copy database JSON to clipboard', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        onTap: () => _handleExport(context, ref),
-                      ),
-                      const Divider(height: 1, color: Colors.white10),
                       ListTile(
                         leading: const Icon(Icons.logout_rounded, color: AppColors.accentRose),
                         title: const Text('Log Out', style: TextStyle(color: AppColors.accentRose, fontSize: 15, fontWeight: FontWeight.w600)),

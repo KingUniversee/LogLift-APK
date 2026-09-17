@@ -40,10 +40,18 @@ analyticsRouter.get('/statistics', async (req: Request, res: Response) => {
     for (const session of sessions) {
       totalDurationSeconds += session.duration_seconds || 0;
       for (const log of session.logs || []) {
+        const isWeightExercise =
+          log.exercise_type !== 'duration' &&
+          log.exercise_type !== 'distance' &&
+          log.exercise_type !== 'cardio' &&
+          log.exercise_type !== 'repsOnly';
+
         for (const set of log.sets || []) {
           if (set.completed) {
             totalReps += set.reps || 0;
-            totalVolumeKg += (set.weight_kg || 0) * (set.reps || 0);
+            if (isWeightExercise && (set.weight_kg || 0) > 0 && (set.reps || 0) > 0) {
+              totalVolumeKg += (set.weight_kg || 0) * (set.reps || 0);
+            }
           }
         }
       }

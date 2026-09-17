@@ -2,19 +2,29 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_text_field.dart';
+import '../../data/models/exercise.dart';
 import '../../data/models/workout_session.dart';
 
 class LogSetModal extends StatefulWidget {
   const LogSetModal({
     required this.exerciseName,
+    required this.exerciseType,
     required this.setLog,
     required this.onSave,
     super.key,
   });
 
   final String exerciseName;
+  final ExerciseType exerciseType;
   final SetLog setLog;
-  final void Function(double weight, int reps, int restSeconds, String notes) onSave;
+  final void Function({
+    required double weight,
+    required int reps,
+    required int durationSeconds,
+    required double distanceKm,
+    required int restSeconds,
+    required String notes,
+  }) onSave;
 
   @override
   State<LogSetModal> createState() => _LogSetModalState();
@@ -23,6 +33,8 @@ class LogSetModal extends StatefulWidget {
 class _LogSetModalState extends State<LogSetModal> {
   late final TextEditingController _weightController;
   late final TextEditingController _repsController;
+  late final TextEditingController _durationController;
+  late final TextEditingController _distanceController;
   late final TextEditingController _restController;
   late final TextEditingController _notesController;
 
@@ -30,10 +42,22 @@ class _LogSetModalState extends State<LogSetModal> {
   void initState() {
     super.initState();
     _weightController = TextEditingController(
-      text: widget.setLog.weightKg > 0 ? widget.setLog.weightKg.toStringAsFixed(widget.setLog.weightKg.truncateToDouble() == widget.setLog.weightKg ? 0 : 1) : '',
+      text: widget.setLog.weightKg > 0
+          ? widget.setLog.weightKg.toStringAsFixed(
+              widget.setLog.weightKg.truncateToDouble() == widget.setLog.weightKg ? 0 : 1)
+          : '',
     );
     _repsController = TextEditingController(
       text: widget.setLog.reps > 0 ? '${widget.setLog.reps}' : '',
+    );
+    _durationController = TextEditingController(
+      text: widget.setLog.durationSeconds > 0 ? '${widget.setLog.durationSeconds}' : '',
+    );
+    _distanceController = TextEditingController(
+      text: widget.setLog.distanceKm > 0
+          ? widget.setLog.distanceKm.toStringAsFixed(
+              widget.setLog.distanceKm.truncateToDouble() == widget.setLog.distanceKm ? 0 : 2)
+          : '',
     );
     _restController = TextEditingController(text: '60');
     _notesController = TextEditingController(text: widget.setLog.notes);
@@ -43,6 +67,8 @@ class _LogSetModalState extends State<LogSetModal> {
   void dispose() {
     _weightController.dispose();
     _repsController.dispose();
+    _durationController.dispose();
+    _distanceController.dispose();
     _restController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -51,11 +77,90 @@ class _LogSetModalState extends State<LogSetModal> {
   void _save() {
     final weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
     final reps = int.tryParse(_repsController.text.trim()) ?? 0;
+    final duration = int.tryParse(_durationController.text.trim()) ?? 0;
+    final distance = double.tryParse(_distanceController.text.trim()) ?? 0.0;
     final rest = int.tryParse(_restController.text.trim()) ?? 60;
     final notes = _notesController.text.trim();
 
-    widget.onSave(weight, reps, rest, notes);
+    widget.onSave(
+      weight: weight,
+      reps: reps,
+      durationSeconds: duration,
+      distanceKm: distance,
+      restSeconds: rest,
+      notes: notes,
+    );
     Navigator.of(context).pop();
+  }
+
+  Widget _buildInputs() {
+    switch (widget.exerciseType) {
+      case ExerciseType.duration:
+        return GlassTextField(
+          controller: _durationController,
+          label: 'Duration (seconds)',
+          hint: '60',
+          keyboardType: TextInputType.number,
+          autofocus: true,
+        );
+      case ExerciseType.repsOnly:
+      case ExerciseType.bodyweight:
+        return GlassTextField(
+          controller: _repsController,
+          label: 'Reps',
+          hint: '10',
+          keyboardType: TextInputType.number,
+          autofocus: true,
+        );
+      case ExerciseType.distance:
+      case ExerciseType.cardio:
+        return Row(
+          children: [
+            Expanded(
+              child: GlassTextField(
+                controller: _distanceController,
+                label: 'Distance (km)',
+                hint: '1.0',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: GlassTextField(
+                controller: _durationController,
+                label: 'Duration (sec)',
+                hint: '300',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        );
+      case ExerciseType.strength:
+      case ExerciseType.weightAndReps:
+        return Row(
+          children: [
+            Expanded(
+              child: GlassTextField(
+                controller: _weightController,
+                label: 'Weight (kg)',
+                hint: '0',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: GlassTextField(
+                controller: _repsController,
+                label: 'Reps',
+                hint: '0',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        );
+    }
   }
 
   @override
@@ -100,28 +205,7 @@ class _LogSetModalState extends State<LogSetModal> {
           ),
           const SizedBox(height: 20),
 
-          Row(
-            children: [
-              Expanded(
-                child: GlassTextField(
-                  controller: _weightController,
-                  label: 'Weight (kg)',
-                  hint: '0',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  autofocus: true,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: GlassTextField(
-                  controller: _repsController,
-                  label: 'Reps',
-                  hint: '0',
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-            ],
-          ),
+          _buildInputs(),
           const SizedBox(height: 16),
 
           GlassTextField(

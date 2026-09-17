@@ -7,7 +7,6 @@ import '../../core/widgets/glass_empty_state.dart';
 import '../../core/widgets/glass_text_field.dart';
 import '../../data/models/workout_session.dart';
 import '../../providers/app_providers.dart';
-import '../../core/widgets/server_settings_dialog.dart';
 import 'workout_details_screen.dart';
 
 class WorkoutHistoryScreen extends ConsumerStatefulWidget {
@@ -350,37 +349,15 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: AppColors.borderGlass),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        showServerSettingsDialog(
-                          context,
-                          onSaved: () => ref.invalidate(completedSessionsProvider),
-                        );
-                      },
-                      icon: const Icon(Icons.settings_outlined, size: 16),
-                      label: const Text('Server URL'),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => ref.invalidate(completedSessionsProvider),
-                      icon: const Icon(Icons.refresh_rounded, size: 16),
-                      label: const Text('Retry'),
-                    ),
-                  ],
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => ref.invalidate(completedSessionsProvider),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Retry'),
                 ),
               ],
             ),

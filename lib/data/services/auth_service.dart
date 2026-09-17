@@ -75,34 +75,6 @@ class AuthService {
     );
   }
 
-  Future<UserProfile> loginWithGoogle(String idToken) async {
-    final response = await _api.post(
-      '/api/auth/google',
-      body: {'idToken': idToken},
-      includeAuth: false,
-    );
-
-    if (response is Map<String, dynamic>) {
-      final token = response['token'] as String;
-      final refreshToken = response['refreshToken'] as String;
-      final userMap = Map<String, dynamic>.from(response['user'] as Map);
-      final user = UserProfile.fromMap(userMap);
-
-      await _api.setTokens(
-        token: token,
-        refreshToken: refreshToken,
-        userId: user.id,
-      );
-
-      return user;
-    }
-
-    throw const ApiException(
-      message: 'Failed to authenticate with Google.',
-      statusCode: 500,
-    );
-  }
-
   Future<UserProfile?> getCurrentUser() async {
     final token = await _api.getAccessToken();
     if (token == null || token.isEmpty) {
