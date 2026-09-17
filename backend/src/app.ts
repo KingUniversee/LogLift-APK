@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { requireDbReady } from './middleware/auth.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
@@ -21,6 +22,10 @@ export function createApp(): Express {
       allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     })
   );
+
+  // Serve uploaded media (e.g. avatars) statically
+  const uploadsPath = path.join(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsPath));
 
   // Parse JSON payloads up to 10MB (for export/import)
   app.use(express.json({ limit: '10mb' }));

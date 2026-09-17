@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -7,6 +8,8 @@ import 'package:liftlog/core/network/api_config.dart';
 import 'package:liftlog/data/models/exercise.dart';
 import 'package:liftlog/data/models/personal_record.dart';
 import 'package:liftlog/data/models/workout_session.dart';
+import 'package:liftlog/data/models/user_profile.dart';
+import 'package:liftlog/data/repositories/user_profile_repository.dart';
 import 'package:liftlog/data/repositories/workout_plan_repository.dart';
 import 'package:liftlog/data/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -406,6 +409,84 @@ void main() {
       final fromMap = PersonalRecord.fromMap(map);
       expect(fromMap.value, equals(100.0));
       expect(fromMap.recordType, equals(PRType.highestWeight));
+    });
+  });
+
+  group('UserProfileRepository Tests', () {
+    test('saveProfile sends PUT /api/users/profile with updated fields', () async {
+      String? capturedPath;
+      Map<String, dynamic>? capturedBody;
+      final mockClient = MockClient((request) async {
+        capturedPath = request.url.path;
+        capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'user': {
+              'id': 'user_abc',
+              'name': 'Updated Name',
+              'avatarUrl': 'https://example.com/new.png',
+              'fitnessGoal': 'Strength',
+            },
+          }),
+          200,
+        );
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      final repo = UserProfileRepository(api);
+
+      final profile = UserProfile(
+        id: 'user_abc',
+        email: 'user@test.com',
+        name: 'Updated Name',
+        avatarUrl: 'https://example.com/new.png',
+        fitnessGoal: 'Strength',
+        createdAt: DateTime(2026, 1, 1),
+      );
+
+      await repo.saveProfile(profile);
+      expect(capturedPath, equals('/api/users/profile'));
+      expect(capturedBody?['name'], equals('Updated Name'));
+      expect(capturedBody?['avatar_url'], equals('https://example.com/new.png'));
+      expect(capturedBody?['fitness_goal'], equals('Strength'));
+    });
+
+    test('uploadAvatar sends multipart POST to /api/users/avatar and returns avatar_url', () async {
+      String? capturedPath;
+      String? capturedContentType;
+      final mockClient = MockClient((request) async {
+        capturedPath = request.url.path;
+        capturedContentType = request.headers['content-type'];
+        if (request.url.path == '/api/users/avatar') {
+          return http.Response(
+            jsonEncode({
+              'avatar_url': 'http://13.140.58.252:22658/uploads/avatars/athlete_123.png',
+              'user': {
+                'id': 'athlete_123',
+                'avatarUrl': 'http://13.140.58.252:22658/uploads/avatars/athlete_123.png',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      final repo = UserProfileRepository(api);
+
+      final tempDir = await Directory.systemTemp.createTemp('avatar_test');
+      final testFile = File('${tempDir.path}/test_avatar.png');
+      await testFile.writeAsBytes([137, 80, 78, 71, 13, 10, 26, 10]);
+
+      try {
+        final resultUrl = await repo.uploadAvatar(testFile);
+        expect(capturedPath, equals('/api/users/avatar'));
+        expect(capturedContentType, contains('multipart/form-data'));
+        expect(resultUrl, equals('http://13.140.58.252:22658/uploads/avatars/athlete_123.png'));
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
     });
   });
 }

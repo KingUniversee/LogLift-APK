@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_config.dart';
 
@@ -210,13 +211,57 @@ class ApiClient {
     );
   }
 
+  Future<dynamic> uploadMultipart(
+    String endpoint, {
+    required File file,
+    String fieldName = 'avatar',
+    bool includeAuth = true,
+  }) async {
+    return _sendWithRetry(
+      () async {
+        final uri = _buildUri(endpoint);
+        final request = http.MultipartRequest('POST', uri);
+        if (includeAuth) {
+          final token = await getAccessToken();
+          if (token != null && token.isNotEmpty) {
+            request.headers['Authorization'] = 'Bearer $token';
+          }
+        }
+        request.headers['Accept'] = 'application/json';
+
+        final lowerPath = file.path.toLowerCase();
+        MediaType contentType;
+        if (lowerPath.endsWith('.png')) {
+          contentType = MediaType('image', 'png');
+        } else if (lowerPath.endsWith('.webp')) {
+          contentType = MediaType('image', 'webp');
+        } else {
+          contentType = MediaType('image', 'jpeg');
+        }
+
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            fieldName,
+            file.path,
+            contentType: contentType,
+          ),
+        );
+        final streamedResponse = await _httpClient.send(request);
+        return http.Response.fromStream(streamedResponse);
+      },
+      endpoint: endpoint,
+      timeout: const Duration(seconds: 30),
+    );
+  }
+
   Future<dynamic> _sendWithRetry(
     Future<http.Response> Function() requestFn, {
     required String endpoint,
+    Duration timeout = const Duration(seconds: 8),
   }) async {
     http.Response response;
     try {
-      response = await requestFn().timeout(const Duration(seconds: 8));
+      response = await requestFn().timeout(timeout);
     } on SocketException catch (_) {
       throw NetworkException(
         message: 'Network connection unavailable. Could not reach server at $baseUrl.',
@@ -239,7 +284,7 @@ class ApiClient {
       final refreshed = await _attemptTokenRefresh();
       if (refreshed) {
         try {
-          response = await requestFn().timeout(const Duration(seconds: 8));
+          response = await requestFn().timeout(timeout);
         } catch (e) {
           throw const NetworkException();
         }
