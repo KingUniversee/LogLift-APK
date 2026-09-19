@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'exercise.dart';
 
 class PlanExercise {
@@ -106,39 +107,63 @@ class PlanExercise {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'plan_id': planId,
-        'exercise_id': exerciseId,
-        'exercise_name': exerciseName,
-        'exercise_muscle': exerciseMuscle.name,
-        'exercise_type': exerciseType.name,
-        'sort_order': sortOrder,
-        'day_of_week': dayOfWeek,
-        'target_sets': targetSets,
-        'target_reps': targetReps,
-        'target_weight': targetWeight,
-        'target_duration_seconds': targetDurationSeconds,
-        'target_distance_km': targetDistanceKm,
-        'rest_seconds': restSeconds,
-      };
+  Map<String, dynamic> toMap() {
+    // Dual encoding: if dayOfWeek != null, encode day into sort_order as (dayOfWeek + 1) * 1000 + (sortOrder % 1000).
+    // This allows older backends without day_of_week schema to persist day assignment reliably.
+    final encodedSortOrder = dayOfWeek != null ? ((dayOfWeek! + 1) * 1000 + (sortOrder % 1000)) : sortOrder;
 
-  factory PlanExercise.fromMap(Map<String, dynamic> map) => PlanExercise(
-        id: map['id'] as String,
-        planId: map['plan_id'] as String,
-        exerciseId: map['exercise_id'] as String,
-        exerciseName: map['exercise_name'] as String? ?? 'Exercise',
-        exerciseMuscle: MuscleGroup.fromString(map['exercise_muscle'] as String? ?? 'FullBody'),
-        exerciseType: ExerciseType.fromString(map['exercise_type'] as String? ?? 'strength'),
-        sortOrder: map['sort_order'] as int? ?? 0,
-        dayOfWeek: map['day_of_week'] as int?,
-        targetSets: map['target_sets'] as int? ?? 3,
-        targetReps: map['target_reps'] as int? ?? 10,
-        targetWeight: (map['target_weight'] as num? ?? 0).toDouble(),
-        targetDurationSeconds: map['target_duration_seconds'] as int? ?? 0,
-        targetDistanceKm: (map['target_distance_km'] as num? ?? 0).toDouble(),
-        restSeconds: map['rest_seconds'] as int? ?? 60,
-      );
+    return {
+      'id': id,
+      'plan_id': planId,
+      'exercise_id': exerciseId,
+      'exercise_name': exerciseName,
+      'exercise_muscle': exerciseMuscle.name,
+      'exercise_type': exerciseType.name,
+      'sort_order': encodedSortOrder,
+      'day_of_week': dayOfWeek,
+      'target_sets': targetSets,
+      'target_reps': targetReps,
+      'target_weight': targetWeight > 0 ? targetWeight : (targetDistanceKm > 0 ? targetDistanceKm : 0.0),
+      'target_duration_seconds': targetDurationSeconds,
+      'target_distance_km': targetDistanceKm,
+      'rest_seconds': restSeconds,
+    };
+  }
+
+  factory PlanExercise.fromMap(Map<String, dynamic> map) {
+    final rawSortOrder = map['sort_order'] as int? ?? 0;
+    final explicitDay = map['day_of_week'] as int?;
+    final dayOfWeek = explicitDay ?? (rawSortOrder >= 1000 ? (rawSortOrder ~/ 1000) - 1 : null);
+    final sortOrder = rawSortOrder >= 1000 ? (rawSortOrder % 1000) : rawSortOrder;
+
+    final exerciseType = ExerciseType.fromString(map['exercise_type'] as String? ?? 'strength');
+    final rawWeight = (map['target_weight'] as num? ?? 0).toDouble();
+    final rawDistance = (map['target_distance_km'] as num? ?? 0).toDouble();
+
+    final targetDistanceKm = rawDistance > 0
+        ? rawDistance
+        : ((exerciseType == ExerciseType.distance || exerciseType == ExerciseType.cardio) ? rawWeight : 0.0);
+    final targetWeight = (exerciseType == ExerciseType.distance || exerciseType == ExerciseType.cardio) && rawDistance == 0
+        ? 0.0
+        : rawWeight;
+
+    return PlanExercise(
+      id: map['id'] as String,
+      planId: map['plan_id'] as String,
+      exerciseId: map['exercise_id'] as String,
+      exerciseName: map['exercise_name'] as String? ?? 'Exercise',
+      exerciseMuscle: MuscleGroup.fromString(map['exercise_muscle'] as String? ?? 'FullBody'),
+      exerciseType: exerciseType,
+      sortOrder: sortOrder,
+      dayOfWeek: dayOfWeek,
+      targetSets: map['target_sets'] as int? ?? 3,
+      targetReps: map['target_reps'] as int? ?? 10,
+      targetWeight: targetWeight,
+      targetDurationSeconds: map['target_duration_seconds'] as int? ?? 0,
+      targetDistanceKm: targetDistanceKm,
+      restSeconds: map['rest_seconds'] as int? ?? 60,
+    );
+  }
 }
 
 class WorkoutPlan {
@@ -306,44 +331,84 @@ class WorkoutPlan {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'color_index': colorIndex,
-        'is_rotating': isRotating,
-        'current_split_index': currentSplitIndex,
-        'leave_dates': leaveDates,
-        'last_completed_date': lastCompletedDate?.toIso8601String(),
-        'last_completed_split_index': lastCompletedSplitIndex,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+  String get cleanDescription {
+    final regex = RegExp(r'\n?<!--liftlog_meta:.*?-->', dotAll: true);
+    return description.replaceAll(regex, '').trim();
+  }
+
+  Map<String, dynamic> toMap() {
+    final meta = {
+      'rot': isRotating,
+      'csi': currentSplitIndex,
+      'lvs': leaveDates,
+      'lcd': lastCompletedDate?.toIso8601String(),
+      'lcs': lastCompletedSplitIndex,
+    };
+    final metaJson = jsonEncode(meta);
+    final baseDesc = cleanDescription;
+    final fullDescription = baseDesc.isEmpty ? '<!--liftlog_meta:$metaJson-->' : '$baseDesc\n<!--liftlog_meta:$metaJson-->';
+
+    return {
+      'id': id,
+      'name': name,
+      'description': fullDescription,
+      'color_index': colorIndex,
+      'is_rotating': isRotating,
+      'current_split_index': currentSplitIndex,
+      'leave_dates': leaveDates,
+      'last_completed_date': lastCompletedDate?.toIso8601String(),
+      'last_completed_split_index': lastCompletedSplitIndex,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
 
   factory WorkoutPlan.fromMap(
     Map<String, dynamic> map, {
     List<int> days = const [],
     List<PlanExercise> exercises = const [],
-  }) =>
-      WorkoutPlan(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        description: map['description'] as String? ?? '',
-        colorIndex: map['color_index'] as int? ?? 0,
-        createdAt: DateTime.parse(map['created_at'] as String),
-        updatedAt: DateTime.parse(map['updated_at'] as String),
-        daysOfWeek: days.isNotEmpty ? days : List<int>.from(map['days_of_week'] as List? ?? []),
-        exercises: exercises.isNotEmpty
-            ? exercises
-            : (map['exercises'] as List? ?? [])
-                .map((e) => PlanExercise.fromMap(Map<String, dynamic>.from(e as Map)))
-                .toList(),
-        isRotating: map['is_rotating'] as bool? ?? true,
-        currentSplitIndex: map['current_split_index'] as int? ?? 0,
-        leaveDates: List<String>.from(map['leave_dates'] as List? ?? []),
-        lastCompletedDate: map['last_completed_date'] != null
-            ? DateTime.tryParse(map['last_completed_date'] as String)
-            : null,
-        lastCompletedSplitIndex: map['last_completed_split_index'] as int?,
-      );
+  }) {
+    var rotating = map['is_rotating'] as bool?;
+    var splitIndex = map['current_split_index'] as int?;
+    var leaves = map['leave_dates'] != null ? List<String>.from(map['leave_dates'] as List) : null;
+    var lastDate = map['last_completed_date'] != null
+        ? DateTime.tryParse(map['last_completed_date'] as String)
+        : null;
+    var lastSplit = map['last_completed_split_index'] as int?;
+
+    final rawDesc = map['description'] as String? ?? '';
+    final metaMatch = RegExp(r'<!--liftlog_meta:(.*?)-->', dotAll: true).firstMatch(rawDesc);
+    if (metaMatch != null) {
+      try {
+        final meta = jsonDecode(metaMatch.group(1)!) as Map<String, dynamic>;
+        rotating ??= meta['rot'] as bool?;
+        splitIndex ??= meta['csi'] as int?;
+        leaves ??= meta['lvs'] != null ? List<String>.from(meta['lvs'] as List) : null;
+        lastDate ??= meta['lcd'] != null ? DateTime.tryParse(meta['lcd'] as String) : null;
+        lastSplit ??= meta['lcs'] as int?;
+      } catch (_) {}
+    }
+
+    final cleanDesc = rawDesc.replaceAll(RegExp(r'\n?<!--liftlog_meta:.*?-->', dotAll: true), '').trim();
+
+    return WorkoutPlan(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      description: cleanDesc,
+      colorIndex: map['color_index'] as int? ?? 0,
+      createdAt: DateTime.parse(map['created_at'] as String),
+      updatedAt: DateTime.parse(map['updated_at'] as String),
+      daysOfWeek: days.isNotEmpty ? days : List<int>.from(map['days_of_week'] as List? ?? []),
+      exercises: exercises.isNotEmpty
+          ? exercises
+          : (map['exercises'] as List? ?? [])
+              .map((e) => PlanExercise.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList(),
+      isRotating: rotating ?? true,
+      currentSplitIndex: splitIndex ?? 0,
+      leaveDates: leaves ?? const [],
+      lastCompletedDate: lastDate,
+      lastCompletedSplitIndex: lastSplit,
+    );
+  }
 }

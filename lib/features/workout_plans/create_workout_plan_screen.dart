@@ -35,7 +35,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
     final existing = widget.existingPlan;
     _isRotating = existing?.isRotating ?? true;
     _nameController = TextEditingController(text: existing?.name ?? '');
-    _descriptionController = TextEditingController(text: existing?.description ?? '');
+    _descriptionController = TextEditingController(text: existing?.cleanDescription ?? '');
 
     if (existing != null) {
       final exerciseDays = existing.exercises

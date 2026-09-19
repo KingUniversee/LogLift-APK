@@ -75,10 +75,20 @@ class WorkoutPlanRepository {
       if (response is Map<String, dynamic>) {
         return _parsePlan(response);
       }
-      return null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
+
+    // Fallback for backends without /leave endpoint
+    try {
+      final plan = await getPlanById(planId);
+      if (plan != null) {
+        final dateStr = WorkoutPlan.formatDateKey(date);
+        final leaves = {...plan.leaveDates, dateStr}.toList();
+        final updated = plan.copyWith(leaveDates: leaves);
+        await savePlan(updated);
+        return updated;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<WorkoutPlan?> cancelLeave(String planId, DateTime date) async {
@@ -91,10 +101,20 @@ class WorkoutPlanRepository {
       if (response is Map<String, dynamic>) {
         return _parsePlan(response);
       }
-      return null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
+
+    // Fallback for backends without /leave endpoint
+    try {
+      final plan = await getPlanById(planId);
+      if (plan != null) {
+        final dateStr = WorkoutPlan.formatDateKey(date);
+        final leaves = plan.leaveDates.where((d) => d != dateStr).toList();
+        final updated = plan.copyWith(leaveDates: leaves);
+        await savePlan(updated);
+        return updated;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<WorkoutPlan?> advancePlanSplit(
@@ -117,10 +137,25 @@ class WorkoutPlanRepository {
       if (response is Map<String, dynamic>) {
         return _parsePlan(response);
       }
-      return null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
+
+    // Fallback for backends without /advance-split endpoint
+    try {
+      final plan = await getPlanById(planId);
+      if (plan != null) {
+        final totalDays = plan.daysOfWeek.isNotEmpty ? plan.daysOfWeek.length : 1;
+        final currentIdx = completedSplitIndex ?? plan.currentSplitIndex;
+        final nextIdx = (currentIdx + 1) % totalDays;
+        final updated = plan.copyWith(
+          currentSplitIndex: nextIdx,
+          lastCompletedDate: completedDate ?? DateTime.now(),
+          lastCompletedSplitIndex: completedSplitIndex ?? plan.currentSplitIndex,
+        );
+        await savePlan(updated);
+        return updated;
+      }
+    } catch (_) {}
+    return null;
   }
 
   WorkoutPlan _parsePlan(Map<String, dynamic> doc) {

@@ -295,6 +295,115 @@ void main() {
       final plans = await repo.getPlans();
       expect(plans, isEmpty);
     });
+
+    test('Preserves Day 2 and Day 3 exercises via sort_order encoding even when backend strips day_of_week', () async {
+      // Simulate backend that strips day_of_week (like deployed Mongoose backend)
+      Map<String, dynamic>? storedPayload;
+      final mockClient = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.contains('/workout-plans')) {
+          final data = jsonDecode(request.body) as Map<String, dynamic>;
+          // Simulate server stripping day_of_week
+          final rawExercises = data['exercises'] as List;
+          final serverSavedExercises = rawExercises.map((e) {
+            final map = Map<String, dynamic>.from(e as Map);
+            map.remove('day_of_week'); // Server strips day_of_week
+            return map;
+          }).toList();
+          storedPayload = {
+            ...data,
+            'exercises': serverSavedExercises,
+          };
+          return http.Response(jsonEncode(storedPayload), 200);
+        }
+        if (request.method == 'GET' && request.url.path.contains('/workout-plans/plan_split')) {
+          return http.Response(jsonEncode(storedPayload), 200);
+        }
+        return http.Response('Not found', 404);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      final repo = WorkoutPlanRepository(api);
+
+      final plan = WorkoutPlan(
+        id: 'plan_split',
+        name: 'Bro Split',
+        description: 'Focus on hypertrophy',
+        daysOfWeek: [0, 1, 2],
+        isRotating: true,
+        currentSplitIndex: 1,
+        leaveDates: ['2026-09-25'],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        exercises: [
+          PlanExercise(
+            id: 'pe_day1',
+            planId: 'plan_split',
+            exerciseId: 'bench',
+            exerciseName: 'Barbell Bench Press',
+            exerciseMuscle: MuscleGroup.chest,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: 0, // Day 1
+          ),
+          PlanExercise(
+            id: 'pe_day2',
+            planId: 'plan_split',
+            exerciseId: 'squat',
+            exerciseName: 'Barbell Squat',
+            exerciseMuscle: MuscleGroup.legs,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: 1, // Day 2
+          ),
+          PlanExercise(
+            id: 'pe_day3',
+            planId: 'plan_split',
+            exerciseId: 'deadlift',
+            exerciseName: 'Deadlift',
+            exerciseMuscle: MuscleGroup.back,
+            exerciseType: ExerciseType.strength,
+            sortOrder: 0,
+            dayOfWeek: 2, // Day 3
+          ),
+        ],
+      );
+
+      // Save plan
+      await repo.savePlan(plan);
+
+      // Verify payload sent encoded sort_order
+      expect(storedPayload, isNotNull);
+      final savedExs = storedPayload!['exercises'] as List;
+      expect(savedExs[0]['sort_order'], equals(1000)); // Day 0 -> (0 + 1) * 1000 + 0
+      expect(savedExs[1]['sort_order'], equals(2000)); // Day 1 -> (1 + 1) * 1000 + 0
+      expect(savedExs[2]['sort_order'], equals(3000)); // Day 2 -> (2 + 1) * 1000 + 0
+      expect(savedExs[0].containsKey('day_of_week'), isFalse); // Stripped by server
+
+      // Reload plan from backend
+      final fetched = await repo.getPlanById('plan_split');
+      expect(fetched, isNotNull);
+      expect(fetched!.description, equals('Focus on hypertrophy'));
+      expect(fetched.isRotating, isTrue);
+      expect(fetched.currentSplitIndex, equals(1));
+      expect(fetched.leaveDates, contains('2026-09-25'));
+
+      // Crucial assertion: Day 2 exercise is restored to Day 1 index (Day 2 in UI)
+      final day1Exercises = fetched.getExercisesForDay(0);
+      final day2Exercises = fetched.getExercisesForDay(1);
+      final day3Exercises = fetched.getExercisesForDay(2);
+
+      expect(day1Exercises.length, equals(1));
+      expect(day1Exercises.first.exerciseName, equals('Barbell Bench Press'));
+      expect(day1Exercises.first.dayOfWeek, equals(0));
+
+      expect(day2Exercises.length, equals(1));
+      expect(day2Exercises.first.exerciseName, equals('Barbell Squat'));
+      expect(day2Exercises.first.dayOfWeek, equals(1)); // Day 2! Not Day 1!
+
+      expect(day3Exercises.length, equals(1));
+      expect(day3Exercises.first.exerciseName, equals('Deadlift'));
+      expect(day3Exercises.first.dayOfWeek, equals(2)); // Day 3!
+    });
   });
 
   group('Domain Model Computations', () {
