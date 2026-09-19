@@ -681,5 +681,310 @@ void main() {
       expect(restored.targetDistanceKm, equals(3.5));
       expect(restored.targetDurationSeconds, equals(1200));
     });
+
+    test('WorkoutPlan daysFormatted formats dynamic routine days correctly', () {
+      final now = DateTime.now();
+      final emptyPlan = WorkoutPlan(
+        id: 'p-empty',
+        name: 'Empty',
+        daysOfWeek: [],
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(emptyPlan.daysFormatted, equals('Unscheduled'));
+
+      final singleDayPlan = WorkoutPlan(
+        id: 'p-1',
+        name: 'Single Day',
+        daysOfWeek: [0],
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(singleDayPlan.daysFormatted, equals('1 Day Split (Day 1)'));
+
+      final singleDayCalendarPlan = WorkoutPlan(
+        id: 'p-1-cal',
+        name: 'Single Day Cal',
+        daysOfWeek: [0],
+        isRotating: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(singleDayCalendarPlan.daysFormatted, equals('1 Day (Day 1)'));
+
+      final threeDayPlan = WorkoutPlan(
+        id: 'p-3',
+        name: '3 Day Routine',
+        daysOfWeek: [0, 1, 2],
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(threeDayPlan.daysFormatted, equals('3 Day Rotating Split (Day 1 - Day 3)'));
+
+      final threeDayCalendarPlan = WorkoutPlan(
+        id: 'p-3-cal',
+        name: '3 Day Calendar',
+        daysOfWeek: [0, 1, 2],
+        isRotating: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(threeDayCalendarPlan.daysFormatted, equals('3 Days (Day 1 - Day 3)'));
+
+      final nonConsecutivePlan = WorkoutPlan(
+        id: 'p-nc',
+        name: 'Split',
+        daysOfWeek: [0, 2],
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(nonConsecutivePlan.daysFormatted, equals('2 Days (Day 1, Day 3)'));
+    });
+  });
+
+  group('Continuous Rotating Workout Split & Leave Tests', () {
+    WorkoutPlan buildSampleRotatingPlan({
+      int currentSplitIndex = 0,
+      List<String> leaveDates = const [],
+      DateTime? lastCompletedDate,
+      int? lastCompletedSplitIndex,
+      bool isRotating = true,
+    }) {
+      final now = DateTime(2026, 9, 14); // Monday
+      const exercises = [
+        PlanExercise(id: 'e1', planId: 'p1', exerciseId: 'c1', exerciseName: 'Bench Press', exerciseMuscle: MuscleGroup.chest, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 0),
+        PlanExercise(id: 'e2', planId: 'p1', exerciseId: 'b1', exerciseName: 'Barbell Row', exerciseMuscle: MuscleGroup.back, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 1),
+        PlanExercise(id: 'e3', planId: 'p1', exerciseId: 'l1', exerciseName: 'Squat', exerciseMuscle: MuscleGroup.legs, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 2),
+        PlanExercise(id: 'e4', planId: 'p1', exerciseId: 'a1', exerciseName: 'Bicep Curl', exerciseMuscle: MuscleGroup.arms, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 3),
+        PlanExercise(id: 'e5', planId: 'p1', exerciseId: 'c2', exerciseName: 'Incline Press', exerciseMuscle: MuscleGroup.chest, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 4),
+        PlanExercise(id: 'e6', planId: 'p1', exerciseId: 'b2', exerciseName: 'Lat Pulldown', exerciseMuscle: MuscleGroup.back, exerciseType: ExerciseType.strength, sortOrder: 0, dayOfWeek: 5),
+        // Day 7 (dayOfWeek: 6) has 0 exercises => OFF Day!
+      ];
+
+      return WorkoutPlan(
+        id: 'rotating-plan-1',
+        name: 'Continuous 7-Day Split',
+        description: 'Rotating sequence',
+        colorIndex: 0,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        exercises: exercises,
+        isRotating: isRotating,
+        currentSplitIndex: currentSplitIndex,
+        leaveDates: leaveDates,
+        lastCompletedDate: lastCompletedDate,
+        lastCompletedSplitIndex: lastCompletedSplitIndex,
+        createdAt: now,
+        updatedAt: now,
+      );
+    }
+
+    test('Scenario A: Full continuous cycle progresses sequentially and wraps around', () {
+      var plan = buildSampleRotatingPlan();
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 14)), equals(0)); // Day 1
+      expect(plan.isOffDay(0), isFalse);
+
+      // Advance after completing Day 1
+      plan = plan.copyWith(currentSplitIndex: 1, lastCompletedDate: DateTime(2026, 9, 14), lastCompletedSplitIndex: 0);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 15)), equals(1)); // Day 2
+
+      // Advance after completing Day 2
+      plan = plan.copyWith(currentSplitIndex: 2, lastCompletedDate: DateTime(2026, 9, 15), lastCompletedSplitIndex: 1);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 16)), equals(2)); // Day 3
+
+      // Advance after completing Day 3
+      plan = plan.copyWith(currentSplitIndex: 3, lastCompletedDate: DateTime(2026, 9, 16), lastCompletedSplitIndex: 2);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 17)), equals(3)); // Day 4
+
+      // Advance after completing Day 4
+      plan = plan.copyWith(currentSplitIndex: 4, lastCompletedDate: DateTime(2026, 9, 17), lastCompletedSplitIndex: 3);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 18)), equals(4)); // Day 5
+
+      // Advance after completing Day 5
+      plan = plan.copyWith(currentSplitIndex: 5, lastCompletedDate: DateTime(2026, 9, 18), lastCompletedSplitIndex: 4);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 19)), equals(5)); // Day 6
+
+      // Advance after completing Day 6 (Saturday) -> Now at Day 7 (index 6, OFF)
+      plan = plan.copyWith(currentSplitIndex: 6, lastCompletedDate: DateTime(2026, 9, 19), lastCompletedSplitIndex: 5);
+      expect(plan.isOffDay(6), isTrue);
+      // On Sunday (2026-09-20), Day 7 is active OFF day
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 20)), equals(6));
+
+      // On Monday (2026-09-21), since Sunday was observed OFF, it rolls over to Day 1 (index 0)
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 21)), equals(0));
+    });
+
+    test('Scenario B: Leave on Day 3 pauses routine and shifts all subsequent days', () {
+      // Day 1 done on Monday (Sep 14) -> split index 1
+      // Day 2 done on Tuesday (Sep 15) -> split index 2 (Day 3 Legs is pending)
+      var plan = buildSampleRotatingPlan(
+        currentSplitIndex: 2,
+        lastCompletedDate: DateTime(2026, 9, 15),
+        lastCompletedSplitIndex: 1,
+      );
+
+      // On Wednesday (Sep 16), user takes leave
+      final wednesday = DateTime(2026, 9, 16);
+      final wedKey = WorkoutPlan.formatDateKey(wednesday);
+      plan = plan.copyWith(leaveDates: [wedKey]);
+
+      // Wednesday is recognized as Leave Day
+      expect(plan.isLeaveForDate(wednesday), isTrue);
+      // The pending split index remains 2 (Legs)
+      expect(plan.getEffectiveSplitIndexForDate(wednesday), equals(2));
+
+      // Thursday (Sep 17) arrives (not leave)
+      final thursday = DateTime(2026, 9, 17);
+      expect(plan.isLeaveForDate(thursday), isFalse);
+      // Pending workout is STILL Day 3 Legs!
+      expect(plan.getEffectiveSplitIndexForDate(thursday), equals(2));
+      expect(plan.getExercisesForDay(2).first.exerciseName, equals('Squat'));
+
+      // User finishes Day 3 on Thursday
+      plan = plan.copyWith(currentSplitIndex: 3, lastCompletedDate: thursday, lastCompletedSplitIndex: 2);
+
+      // Friday is Day 4 (Arms)
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 18)), equals(3));
+      expect(plan.getExercisesForDay(3).first.exerciseName, equals('Bicep Curl'));
+
+      // Saturday is Day 5 (Chest)
+      plan = plan.copyWith(currentSplitIndex: 4, lastCompletedDate: DateTime(2026, 9, 18), lastCompletedSplitIndex: 3);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 19)), equals(4));
+
+      // Sunday is Day 6 (Back)
+      plan = plan.copyWith(currentSplitIndex: 5, lastCompletedDate: DateTime(2026, 9, 19), lastCompletedSplitIndex: 4);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 20)), equals(5));
+
+      // Monday is Day 7 (OFF) - shifted because of Wednesday's leave!
+      plan = plan.copyWith(currentSplitIndex: 6, lastCompletedDate: DateTime(2026, 9, 20), lastCompletedSplitIndex: 5);
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 21)), equals(6));
+      expect(plan.isOffDay(6), isTrue);
+    });
+
+    test('Scenario C: Multiple consecutive leaves pause routine for multiple days', () {
+      var plan = buildSampleRotatingPlan(
+        currentSplitIndex: 2, // Day 3 pending
+        lastCompletedDate: DateTime(2026, 9, 15),
+        lastCompletedSplitIndex: 1,
+      );
+
+      final wed = WorkoutPlan.formatDateKey(DateTime(2026, 9, 16));
+      final thu = WorkoutPlan.formatDateKey(DateTime(2026, 9, 17));
+      plan = plan.copyWith(leaveDates: [wed, thu]);
+
+      expect(plan.isLeaveForDate(DateTime(2026, 9, 16)), isTrue);
+      expect(plan.isLeaveForDate(DateTime(2026, 9, 17)), isTrue);
+      expect(plan.isLeaveForDate(DateTime(2026, 9, 18)), isFalse);
+
+      // On Friday (Sep 18), pending workout is still Day 3 Legs!
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 18)), equals(2));
+      expect(plan.getExercisesForDay(2).first.exerciseName, equals('Squat'));
+    });
+
+    test('Scenario D: Calendar week rollover does NOT reset routine to Day 1', () {
+      // User finishes Day 1 on Saturday (Sep 19), Day 2 on Sunday (Sep 20)
+      final plan = buildSampleRotatingPlan(
+        currentSplitIndex: 2, // Day 3 pending
+        lastCompletedDate: DateTime(2026, 9, 20), // Sunday
+        lastCompletedSplitIndex: 1,
+      );
+
+      // On Monday (Sep 21), it is Day 3 (index 2), NOT Day 1 (index 0)
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 21)), equals(2));
+    });
+
+    test('Scenario E: Leave on an OFF Day shifts the OFF day forward', () {
+      // Day 6 completed on Saturday (Sep 19). Day 7 OFF is active.
+      var plan = buildSampleRotatingPlan(
+        currentSplitIndex: 6, // Day 7 OFF
+        lastCompletedDate: DateTime(2026, 9, 19),
+        lastCompletedSplitIndex: 5,
+      );
+
+      // User marks Sunday (Sep 20) as Leave
+      final sunKey = WorkoutPlan.formatDateKey(DateTime(2026, 9, 20));
+      plan = plan.copyWith(leaveDates: [sunKey]);
+
+      expect(plan.isLeaveForDate(DateTime(2026, 9, 20)), isTrue);
+
+      // On Monday (Sep 21), since Sunday was leave, the OFF day is observed on Monday instead of advancing!
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 21)), equals(6));
+      expect(plan.isOffDay(6), isTrue);
+    });
+
+    test('Scenario F: Cancelling leave restores the pending workout immediately', () {
+      final today = DateTime(2026, 9, 16);
+      final todayKey = WorkoutPlan.formatDateKey(today);
+      var plan = buildSampleRotatingPlan(
+        currentSplitIndex: 2,
+        leaveDates: [todayKey],
+      );
+
+      expect(plan.isLeaveForDate(today), isTrue);
+
+      // Cancel leave
+      final updatedLeaves = List<String>.from(plan.leaveDates)..remove(todayKey);
+      plan = plan.copyWith(leaveDates: updatedLeaves);
+
+      expect(plan.isLeaveForDate(today), isFalse);
+      expect(plan.getEffectiveSplitIndexForDate(today), equals(2));
+    });
+
+    test('Scenario G: Legacy plan with isRotating: false uses weekday index', () {
+      final plan = buildSampleRotatingPlan(isRotating: false);
+      // Monday = index 0, Tuesday = index 1, Wednesday = index 2, Sunday = index 6
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 14)), equals(0)); // Monday
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 15)), equals(1)); // Tuesday
+      expect(plan.getEffectiveSplitIndexForDate(DateTime(2026, 9, 20)), equals(6)); // Sunday
+    });
+
+    test('WorkoutPlanRepository leave and advancePlanSplit invoke correct API endpoints', () async {
+      String? capturedPath;
+      Map<String, dynamic>? capturedBody;
+
+      final mockClient = MockClient((request) async {
+        capturedPath = request.url.path;
+        capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
+
+        final sampleDoc = {
+          'id': 'p1',
+          'name': 'Test Plan',
+          'description': '',
+          'color_index': 0,
+          'days_of_week': [0, 1, 2],
+          'exercises': [],
+          'is_rotating': true,
+          'current_split_index': 1,
+          'leave_dates': ['2026-09-16'],
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+        return http.Response(jsonEncode(sampleDoc), 200);
+      });
+
+      final api = ApiClient(httpClient: mockClient);
+      final repo = WorkoutPlanRepository(api);
+
+      // 1. Record leave
+      final leavePlan = await repo.recordLeave('p1', DateTime(2026, 9, 16));
+      expect(capturedPath, equals('/api/workout-plans/p1/leave'));
+      expect(capturedBody?['date'], equals('2026-09-16'));
+      expect(capturedBody?['action'], equals('take'));
+      expect(leavePlan?.isLeaveForDate(DateTime(2026, 9, 16)), isTrue);
+
+      // 2. Cancel leave
+      await repo.cancelLeave('p1', DateTime(2026, 9, 16));
+      expect(capturedPath, equals('/api/workout-plans/p1/leave'));
+      expect(capturedBody?['action'], equals('cancel'));
+
+      // 3. Advance split
+      final advancedPlan = await repo.advancePlanSplit(
+        'p1',
+        completedSplitIndex: 0,
+        completedDate: DateTime(2026, 9, 16),
+      );
+      expect(capturedPath, equals('/api/workout-plans/p1/advance-split'));
+      expect(capturedBody?['completed_split_index'], equals(0));
+      expect(advancedPlan?.currentSplitIndex, equals(1));
+    });
   });
 }

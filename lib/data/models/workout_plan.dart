@@ -151,6 +151,11 @@ class WorkoutPlan {
     required this.updatedAt,
     this.daysOfWeek = const [],
     this.exercises = const [],
+    this.isRotating = true,
+    this.currentSplitIndex = 0,
+    this.leaveDates = const [],
+    this.lastCompletedDate,
+    this.lastCompletedSplitIndex,
   });
 
   final String id;
@@ -159,8 +164,60 @@ class WorkoutPlan {
   final int colorIndex;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final List<int> daysOfWeek; // 0=Monday, 6=Sunday
+  final List<int> daysOfWeek; // 0=Day 1, 1=Day 2... (or 0=Mon, 6=Sun in legacy)
   final List<PlanExercise> exercises;
+  final bool isRotating;
+  final int currentSplitIndex;
+  final List<String> leaveDates; // formatted 'yyyy-MM-dd'
+  final DateTime? lastCompletedDate;
+  final int? lastCompletedSplitIndex;
+
+  static String formatDateKey(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  bool isLeaveForDate(DateTime date) {
+    return leaveDates.contains(formatDateKey(date));
+  }
+
+  bool isOffDay(int dayIndex) {
+    return getExercisesForDay(dayIndex).isEmpty;
+  }
+
+  int getEffectiveSplitIndexForDate(DateTime date) {
+    if (!isRotating) {
+      return (date.weekday - 1) % 7;
+    }
+    if (daysOfWeek.isEmpty) return 0;
+    final totalDays = daysOfWeek.length;
+    final safeIndex = currentSplitIndex % totalDays;
+
+    // If safeIndex is an OFF day, check whether it was already observed on a prior non-leave day
+    if (isOffDay(safeIndex) && lastCompletedDate != null) {
+      final lastDateOnly = DateTime(lastCompletedDate!.year, lastCompletedDate!.month, lastCompletedDate!.day);
+      final targetDateOnly = DateTime(date.year, date.month, date.day);
+      final daysDiff = targetDateOnly.difference(lastDateOnly).inDays;
+
+      if (daysDiff > 0) {
+        var leavesInBetween = 0;
+        for (var i = 1; i < daysDiff; i++) {
+          final intermediateDate = lastDateOnly.add(Duration(days: i));
+          if (isLeaveForDate(intermediateDate)) {
+            leavesInBetween++;
+          }
+        }
+        final nonLeaveDaysPassed = (daysDiff - 1) - leavesInBetween;
+        if (nonLeaveDaysPassed >= 1) {
+          return (safeIndex + 1) % totalDays;
+        }
+      }
+    }
+
+    return safeIndex;
+  }
 
   bool get hasDayWiseConfiguration => exercises.any((e) => e.dayOfWeek != null);
 
@@ -197,20 +254,23 @@ class WorkoutPlan {
   }
 
   bool isScheduledFor(DateTime date) {
-    // DateTime.weekday is 1=Monday, 7=Sunday
-    final dayIndex = date.weekday - 1;
-    if (!daysOfWeek.contains(dayIndex)) return false;
-    if (hasDayWiseConfiguration) {
-      return exercises.any((e) => e.dayOfWeek == dayIndex);
-    }
+    if (daysOfWeek.isEmpty) return false;
     return true;
   }
 
   String get daysFormatted {
     if (daysOfWeek.isEmpty) return 'Unscheduled';
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final sorted = List<int>.from(daysOfWeek)..sort();
-    return sorted.map((d) => dayNames[d]).join(', ');
+    if (sorted.length == 1) {
+      return isRotating ? '1 Day Split (Day 1)' : '1 Day (Day ${sorted.first + 1})';
+    }
+    final isConsecutive = sorted.last - sorted.first == sorted.length - 1;
+    if (isConsecutive && sorted.first == 0) {
+      return isRotating
+          ? '${sorted.length} Day Rotating Split (Day 1 - Day ${sorted.length})'
+          : '${sorted.length} Days (Day 1 - Day ${sorted.length})';
+    }
+    return '${sorted.length} Days (${sorted.map((d) => 'Day ${d + 1}').join(', ')})';
   }
 
   WorkoutPlan copyWith({
@@ -222,6 +282,12 @@ class WorkoutPlan {
     DateTime? updatedAt,
     List<int>? daysOfWeek,
     List<PlanExercise>? exercises,
+    bool? isRotating,
+    int? currentSplitIndex,
+    List<String>? leaveDates,
+    DateTime? lastCompletedDate,
+    int? lastCompletedSplitIndex,
+    bool clearLastCompletedDate = false,
   }) {
     return WorkoutPlan(
       id: id ?? this.id,
@@ -232,6 +298,11 @@ class WorkoutPlan {
       updatedAt: updatedAt ?? this.updatedAt,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       exercises: exercises ?? this.exercises,
+      isRotating: isRotating ?? this.isRotating,
+      currentSplitIndex: currentSplitIndex ?? this.currentSplitIndex,
+      leaveDates: leaveDates ?? this.leaveDates,
+      lastCompletedDate: clearLastCompletedDate ? null : (lastCompletedDate ?? this.lastCompletedDate),
+      lastCompletedSplitIndex: lastCompletedSplitIndex ?? this.lastCompletedSplitIndex,
     );
   }
 
@@ -240,6 +311,11 @@ class WorkoutPlan {
         'name': name,
         'description': description,
         'color_index': colorIndex,
+        'is_rotating': isRotating,
+        'current_split_index': currentSplitIndex,
+        'leave_dates': leaveDates,
+        'last_completed_date': lastCompletedDate?.toIso8601String(),
+        'last_completed_split_index': lastCompletedSplitIndex,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
@@ -256,7 +332,18 @@ class WorkoutPlan {
         colorIndex: map['color_index'] as int? ?? 0,
         createdAt: DateTime.parse(map['created_at'] as String),
         updatedAt: DateTime.parse(map['updated_at'] as String),
-        daysOfWeek: days,
-        exercises: exercises,
+        daysOfWeek: days.isNotEmpty ? days : List<int>.from(map['days_of_week'] as List? ?? []),
+        exercises: exercises.isNotEmpty
+            ? exercises
+            : (map['exercises'] as List? ?? [])
+                .map((e) => PlanExercise.fromMap(Map<String, dynamic>.from(e as Map)))
+                .toList(),
+        isRotating: map['is_rotating'] as bool? ?? true,
+        currentSplitIndex: map['current_split_index'] as int? ?? 0,
+        leaveDates: List<String>.from(map['leave_dates'] as List? ?? []),
+        lastCompletedDate: map['last_completed_date'] != null
+            ? DateTime.tryParse(map['last_completed_date'] as String)
+            : null,
+        lastCompletedSplitIndex: map['last_completed_split_index'] as int?,
       );
 }

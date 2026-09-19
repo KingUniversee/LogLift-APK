@@ -20,6 +20,7 @@ class ActiveWorkoutState {
     this.lastDetectedPRs = const [],
     this.restTimerTargetEndTime,
     this.hasCompletedAlertFired = false,
+    this.activeSplitIndex,
   });
 
   final WorkoutSession? session;
@@ -31,6 +32,7 @@ class ActiveWorkoutState {
   final List<PersonalRecord> lastDetectedPRs;
   final DateTime? restTimerTargetEndTime;
   final bool hasCompletedAlertFired;
+  final int? activeSplitIndex;
 
   bool get hasActiveWorkout => session != null && session!.status == WorkoutStatus.inProgress;
 
@@ -52,6 +54,7 @@ class ActiveWorkoutState {
     List<PersonalRecord>? lastDetectedPRs,
     DateTime? Function()? restTimerTargetEndTime,
     bool? hasCompletedAlertFired,
+    int? Function()? activeSplitIndex,
   }) {
     return ActiveWorkoutState(
       session: session != null ? session() : this.session,
@@ -65,6 +68,7 @@ class ActiveWorkoutState {
           ? restTimerTargetEndTime()
           : this.restTimerTargetEndTime,
       hasCompletedAlertFired: hasCompletedAlertFired ?? this.hasCompletedAlertFired,
+      activeSplitIndex: activeSplitIndex != null ? activeSplitIndex() : this.activeSplitIndex,
     );
   }
 }
@@ -103,9 +107,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
 
     final exerciseLogs = <ExerciseLog>[];
 
+    final targetDay = plan != null
+        ? (dayIndex ?? (plan.isRotating ? plan.getEffectiveSplitIndexForDate(now) : (now.weekday - 1)))
+        : null;
+
     if (plan != null) {
-      final targetDay = dayIndex ?? (now.weekday - 1);
-      final exercisesToLoad = plan.getExercisesForDay(targetDay);
+      final exercisesToLoad = plan.getExercisesForDay(targetDay!);
 
       for (var i = 0; i < exercisesToLoad.length; i++) {
         final planEx = exercisesToLoad[i];
@@ -174,6 +181,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
       session: newSession,
       currentExerciseIndex: 0,
       elapsedSeconds: 0,
+      activeSplitIndex: targetDay,
     );
 
     _startTicker();
@@ -381,6 +389,19 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
     // Save completed session to database
     await ref.read(sessionRepoProvider).saveSession(completedSession);
 
+    // If session was from a workout plan, advance rotating split index
+    if (completedSession.planId != null) {
+      try {
+        await ref.read(planRepoProvider).advancePlanSplit(
+              completedSession.planId!,
+              completedSplitIndex: state.activeSplitIndex,
+              completedDate: now,
+            );
+      } catch (_) {
+        // Safe ignore on offline/network errors
+      }
+    }
+
     // Run PR detection engine
     final prs = await ref.read(prEngineProvider).evaluateAndSaveSessionPRs(completedSession);
 
@@ -391,12 +412,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutState> {
       restTimerTargetEndTime: () => null,
       hasCompletedAlertFired: true,
       lastDetectedPRs: prs,
+      activeSplitIndex: () => null,
     );
 
     // Invalidate dependent providers to reactively update Home, History, Progress, and Reports
     ref.invalidate(completedSessionsProvider);
     ref.invalidate(allPrsProvider);
     ref.invalidate(overallStatsProvider);
+    ref.invalidate(workoutPlansProvider);
     ref.invalidate(todayPlanProvider);
 
     return completedSession;

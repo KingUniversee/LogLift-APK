@@ -219,6 +219,154 @@ void main() {
     // 105s - 15s = 90s -> "1m 30s"
     expect(find.text('1m 30s'), findsOneWidget);
   });
+
+  testWidgets('CreateWorkoutPlanScreen displays dynamic Day 1, Day 2, Day 3, adds new day, and deletes day', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          workoutPlansProvider.overrideWith(() => _MockWorkoutPlansNotifier()),
+        ],
+        child: const MaterialApp(
+          home: CreateWorkoutPlanScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Verify default dynamic days: Day 1, Day 2, Day 3
+    expect(find.text('Day 1'), findsWidgets);
+    expect(find.text('Day 2'), findsWidgets);
+    expect(find.text('Day 3'), findsWidgets);
+    expect(find.text('Add Day'), findsOneWidget);
+    expect(find.text('Continuous Rotating Split'), findsOneWidget);
+
+    // 2. Tap Add Day to dynamically add Day 4
+    await tester.tap(find.text('Add Day'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Day 4'), findsWidgets);
+    expect(find.text('4 Days configured'), findsOneWidget);
+
+    // 3. Delete Day 4 using the trash icon in Day banner
+    final deleteDayButton = find.byTooltip('Delete Day 4');
+    expect(deleteDayButton, findsOneWidget);
+    await tester.tap(deleteDayButton);
+    await tester.pumpAndSettle();
+
+    // Verify it is back to 3 days configured
+    expect(find.text('3 Days configured'), findsOneWidget);
+    expect(find.text('Day 4'), findsNothing);
+  });
+
+  testWidgets('HomeScreen renders Leave Day hero state with Cancel Leave button when today is leave', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final today = DateTime.now();
+    final todayKey = WorkoutPlan.formatDateKey(today);
+    final leavePlan = WorkoutPlan(
+      id: 'p-leave',
+      name: 'Push Pull Legs',
+      daysOfWeek: [0, 1, 2],
+      currentSplitIndex: 0,
+      leaveDates: [todayKey],
+      createdAt: today,
+      updatedAt: today,
+      exercises: const [
+        PlanExercise(
+          id: 'e1',
+          planId: 'p-leave',
+          exerciseId: 'bench',
+          exerciseName: 'Bench Press',
+          exerciseMuscle: MuscleGroup.chest,
+          exerciseType: ExerciseType.strength,
+          sortOrder: 0,
+          dayOfWeek: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          todayPlanProvider.overrideWith((ref) => Future.value(leavePlan)),
+          workoutPlansProvider.overrideWith(() => _MockWorkoutPlansNotifier()),
+          completedSessionsProvider.overrideWith(() => _MockEmptySessionsNotifier()),
+          allPrsProvider.overrideWith(() => _MockEmptyPrsNotifier()),
+          exercisesProvider.overrideWith(() => _MockEmptyExercisesNotifier()),
+          userProfileProvider.overrideWith(() => _MockUserProfileNotifier()),
+          settingsProvider.overrideWith(() => _MockSettingsNotifier()),
+          sessionRepoProvider.overrideWithValue(_MockSessionRepository()),
+        ],
+        child: const MaterialApp(
+          home: MainShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('LEAVE DAY · ROUTINE PAUSED'), findsOneWidget);
+    expect(find.text('Cancel Leave'), findsOneWidget);
+    expect(find.text('Start Anyway'), findsOneWidget);
+  });
+
+  testWidgets('HomeScreen renders Rest Day (OFF in routine) hero state when effective day is OFF', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final today = DateTime.now();
+    final offPlan = WorkoutPlan(
+      id: 'p-off',
+      name: 'Bro Split',
+      daysOfWeek: [0, 1],
+      currentSplitIndex: 1, // Day 2 has no exercises => OFF
+      createdAt: today,
+      updatedAt: today,
+      exercises: const [
+        PlanExercise(
+          id: 'e1',
+          planId: 'p-off',
+          exerciseId: 'curl',
+          exerciseName: 'Bicep Curl',
+          exerciseMuscle: MuscleGroup.arms,
+          exerciseType: ExerciseType.strength,
+          sortOrder: 0,
+          dayOfWeek: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          todayPlanProvider.overrideWith((ref) => Future.value(offPlan)),
+          workoutPlansProvider.overrideWith(() => _MockWorkoutPlansNotifier()),
+          completedSessionsProvider.overrideWith(() => _MockEmptySessionsNotifier()),
+          allPrsProvider.overrideWith(() => _MockEmptyPrsNotifier()),
+          exercisesProvider.overrideWith(() => _MockEmptyExercisesNotifier()),
+          userProfileProvider.overrideWith(() => _MockUserProfileNotifier()),
+          settingsProvider.overrideWith(() => _MockSettingsNotifier()),
+          sessionRepoProvider.overrideWithValue(_MockSessionRepository()),
+        ],
+        child: const MaterialApp(
+          home: MainShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('REST DAY · DAY 2 (OFF IN ROUTINE)'), findsOneWidget);
+    expect(find.text('Take Leave'), findsOneWidget);
+    expect(find.text('Mark Rest Done'), findsOneWidget);
+  });
 }
 
 class _MockSessionRepository extends WorkoutSessionRepository {

@@ -5,6 +5,7 @@ import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../data/models/workout_plan.dart';
 import '../../providers/active_workout_provider.dart';
+import '../../providers/app_providers.dart';
 import 'active_workout_screen.dart';
 
 class StartWorkoutScreen extends ConsumerStatefulWidget {
@@ -24,34 +25,64 @@ class StartWorkoutScreen extends ConsumerStatefulWidget {
 class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
   late int _selectedDayIndex;
 
-  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _dayFullNames = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday'
-  ];
-
   @override
   void initState() {
     super.initState();
-    final todayIndex = (DateTime.now().weekday - 1) % 7;
     if (widget.initialDayIndex != null) {
       _selectedDayIndex = widget.initialDayIndex!;
-    } else if (widget.plan.daysOfWeek.contains(todayIndex)) {
-      _selectedDayIndex = todayIndex;
+    } else if (widget.plan.isRotating) {
+      _selectedDayIndex = widget.plan.getEffectiveSplitIndexForDate(DateTime.now());
     } else if (widget.plan.daysOfWeek.isNotEmpty) {
       _selectedDayIndex = widget.plan.daysOfWeek.first;
     } else {
-      _selectedDayIndex = todayIndex;
+      _selectedDayIndex = 0;
     }
+  }
+
+  void _confirmTakeLeave(DateTime date) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.beach_access_rounded, color: AppColors.accentAmber, size: 24),
+            SizedBox(width: 10),
+            Text('Take Leave Today?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Taking leave will pause your routine sequence for today. Day ${_selectedDayIndex + 1} will remain waiting and will resume next time you work out.',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accentAmber,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(workoutPlansProvider.notifier).recordLeave(widget.plan.id, date);
+              if (mounted) setState(() {});
+            },
+            child: const Text('Confirm Leave', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final isTodayLeave = widget.plan.isLeaveForDate(today);
     final exercises = widget.plan.getExercisesForDay(_selectedDayIndex);
     final estDuration = widget.plan.estimatedDurationMinutesForDay(_selectedDayIndex);
     final hasMultipleDays = widget.plan.daysOfWeek.length > 1;
@@ -84,10 +115,41 @@ class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${_dayFullNames[_selectedDayIndex]} · Estimated time: ~$estDuration min · ${exercises.length} exercises',
+                    'Day ${_selectedDayIndex + 1} · Estimated time: ~$estDuration min · ${exercises.length} exercises',
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
+
+                  if (isTodayLeave) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentAmber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.accentAmber.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.beach_access_rounded, color: AppColors.accentAmber, size: 20),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Today is marked as Leave (routine paused).',
+                              style: TextStyle(color: AppColors.accentAmber, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await ref.read(workoutPlansProvider.notifier).cancelLeave(widget.plan.id, today);
+                              if (mounted) setState(() {});
+                            },
+                            child: const Text('Cancel Leave', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Day selector chips if plan has multiple scheduled days
                   if (hasMultipleDays) ...[
@@ -104,7 +166,7 @@ class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
                               onSelected: (val) {
                                 if (val) setState(() => _selectedDayIndex = day);
                               },
-                              label: Text('${_dayNames[day]} ($exCount)'),
+                              label: Text('Day ${day + 1} ($exCount)'),
                               selectedColor: AppColors.primary,
                               backgroundColor: AppColors.surfaceGlass,
                               labelStyle: TextStyle(
@@ -126,21 +188,61 @@ class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Start Workout Primary Button
-                  GlassButton(
-                    label: 'Start Workout',
-                    icon: Icons.play_arrow_rounded,
-                    onPressed: () async {
-                      await ref.read(activeWorkoutProvider.notifier).startWorkout(
-                            plan: widget.plan,
-                            dayIndex: _selectedDayIndex,
-                          );
-                      if (context.mounted) {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const ActiveWorkoutScreen()),
-                        );
-                      }
-                    },
+                  // Start Workout Primary Button & Leave Button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GlassButton(
+                          label: 'Start Workout',
+                          icon: Icons.play_arrow_rounded,
+                          onPressed: () async {
+                            await ref.read(activeWorkoutProvider.notifier).startWorkout(
+                                  plan: widget.plan,
+                                  dayIndex: _selectedDayIndex,
+                                );
+                            if (context.mounted) {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(builder: (_) => const ActiveWorkoutScreen()),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      if (!isTodayLeave) ...[
+                        const SizedBox(width: 10),
+                        Tooltip(
+                          message: 'Take leave for today',
+                          child: InkWell(
+                            onTap: () => _confirmTakeLeave(today),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              height: 52,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentAmber.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.accentAmber.withValues(alpha: 0.35)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.beach_access_rounded, color: AppColors.accentAmber, size: 18),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Leave',
+                                    style: TextStyle(
+                                      color: AppColors.accentAmber,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 24),
 
@@ -148,7 +250,7 @@ class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${_dayNames[_selectedDayIndex]} Exercises (${exercises.length})',
+                        'Day ${_selectedDayIndex + 1} Exercises (${exercises.length})',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -168,7 +270,7 @@ class _StartWorkoutScreenState extends ConsumerState<StartWorkoutScreen> {
                                 const Icon(Icons.bed_rounded, size: 40, color: AppColors.textMuted),
                                 const SizedBox(height: 10),
                                 Text(
-                                  'No exercises scheduled for ${_dayFullNames[_selectedDayIndex]}',
+                                  'No exercises scheduled for Day ${_selectedDayIndex + 1}',
                                   style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                                 ),
                               ],

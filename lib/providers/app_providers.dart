@@ -183,6 +183,32 @@ class WorkoutPlansNotifier extends AsyncNotifier<List<WorkoutPlan>> {
     await ref.read(planRepoProvider).duplicatePlan(id);
     ref.invalidateSelf();
   }
+
+  Future<void> recordLeave(String planId, DateTime date) async {
+    await ref.read(planRepoProvider).recordLeave(planId, date);
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
+  }
+
+  Future<void> cancelLeave(String planId, DateTime date) async {
+    await ref.read(planRepoProvider).cancelLeave(planId, date);
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
+  }
+
+  Future<void> advancePlanSplit(
+    String planId, {
+    int? completedSplitIndex,
+    DateTime? completedDate,
+  }) async {
+    await ref.read(planRepoProvider).advancePlanSplit(
+          planId,
+          completedSplitIndex: completedSplitIndex,
+          completedDate: completedDate,
+        );
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
+  }
 }
 
 final workoutPlansProvider = AsyncNotifierProvider<WorkoutPlansNotifier, List<WorkoutPlan>>(

@@ -65,6 +65,64 @@ class WorkoutPlanRepository {
     }
   }
 
+  Future<WorkoutPlan?> recordLeave(String planId, DateTime date) async {
+    try {
+      final dateStr = WorkoutPlan.formatDateKey(date);
+      final response = await _api.post(
+        '/workout-plans/$planId/leave',
+        body: {'date': dateStr, 'action': 'take'},
+      );
+      if (response is Map<String, dynamic>) {
+        return _parsePlan(response);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<WorkoutPlan?> cancelLeave(String planId, DateTime date) async {
+    try {
+      final dateStr = WorkoutPlan.formatDateKey(date);
+      final response = await _api.post(
+        '/workout-plans/$planId/leave',
+        body: {'date': dateStr, 'action': 'cancel'},
+      );
+      if (response is Map<String, dynamic>) {
+        return _parsePlan(response);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<WorkoutPlan?> advancePlanSplit(
+    String planId, {
+    int? completedSplitIndex,
+    DateTime? completedDate,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (completedSplitIndex != null) {
+        body['completed_split_index'] = completedSplitIndex;
+      }
+      if (completedDate != null) {
+        body['completed_date'] = completedDate.toIso8601String();
+      }
+      final response = await _api.post(
+        '/workout-plans/$planId/advance-split',
+        body: body,
+      );
+      if (response is Map<String, dynamic>) {
+        return _parsePlan(response);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   WorkoutPlan _parsePlan(Map<String, dynamic> doc) {
     final days = List<int>.from(doc['days_of_week'] as List? ?? []);
     final rawExercises = doc['exercises'] as List? ?? [];

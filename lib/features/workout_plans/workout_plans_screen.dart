@@ -127,7 +127,7 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
 
     return Scaffold(
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 72),
+        padding: EdgeInsets.only(bottom: 96 + MediaQuery.paddingOf(context).bottom),
         child: FloatingActionButton(
           backgroundColor: AppColors.primary,
           onPressed: () {
@@ -233,7 +233,7 @@ class _WorkoutPlansScreenState extends ConsumerState<WorkoutPlansScreen> {
                         }
 
                         return ListView.separated(
-                          padding: const EdgeInsets.only(bottom: 100),
+                          padding: EdgeInsets.only(bottom: 140 + MediaQuery.paddingOf(context).bottom),
                           itemCount: plans.length,
                           separatorBuilder: (context, index) => const SizedBox(height: 14),
                           itemBuilder: (context, index) {

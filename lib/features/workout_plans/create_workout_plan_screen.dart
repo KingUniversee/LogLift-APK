@@ -23,38 +23,56 @@ class CreateWorkoutPlanScreen extends ConsumerStatefulWidget {
 class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
-  late List<int> _selectedDays;
+  late List<int> _days;
   late Map<int, List<PlanExercise>> _dayExercises;
   int _currentDayIndex = 0;
+  bool _isRotating = true;
   final _formKey = GlobalKey<FormState>();
-
-  final _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  final _dayFullNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.existingPlan?.name ?? '');
-    _descriptionController = TextEditingController(text: widget.existingPlan?.description ?? '');
-    _selectedDays = List<int>.from(widget.existingPlan?.daysOfWeek ?? [0, 2, 4]); // Mon, Wed, Fri by default
-    _currentDayIndex = _selectedDays.isNotEmpty ? _selectedDays.first : 0;
+    final existing = widget.existingPlan;
+    _isRotating = existing?.isRotating ?? true;
+    _nameController = TextEditingController(text: existing?.name ?? '');
+    _descriptionController = TextEditingController(text: existing?.description ?? '');
 
-    _dayExercises = {for (int i = 0; i < 7; i++) i: <PlanExercise>[]};
+    if (existing != null) {
+      final exerciseDays = existing.exercises
+          .map((e) => e.dayOfWeek)
+          .whereType<int>()
+          .toSet();
+      final planDays = existing.daysOfWeek.toSet();
+      final allDays = {...planDays, ...exerciseDays}.toList()..sort();
 
-    if (widget.existingPlan != null) {
-      final existing = widget.existingPlan!;
-      final hasDaySpecific = existing.exercises.any((e) => e.dayOfWeek != null);
-      if (hasDaySpecific) {
-        for (final ex in existing.exercises) {
-          if (ex.dayOfWeek != null && ex.dayOfWeek! >= 0 && ex.dayOfWeek! < 7) {
-            _dayExercises[ex.dayOfWeek!]!.add(ex);
-          }
+      if (allDays.isEmpty) {
+        _days = [0, 1, 2];
+        _dayExercises = {for (int i = 0; i < 3; i++) i: <PlanExercise>[]};
+        if (existing.exercises.isNotEmpty) {
+          _dayExercises[0] = existing.exercises
+              .map((e) => e.copyWith(dayOfWeek: 0))
+              .toList();
         }
-      } else if (existing.exercises.isNotEmpty) {
-        // Legacy plan without day tags: place existing exercises in the primary/first selected day without duplicating across all days
-        final primaryDay = _selectedDays.isNotEmpty ? _selectedDays.first : 0;
-        _dayExercises[primaryDay] = List<PlanExercise>.from(existing.exercises);
+      } else {
+        _days = List.generate(allDays.length, (i) => i);
+        _dayExercises = {for (int i = 0; i < _days.length; i++) i: <PlanExercise>[]};
+
+        for (var newIdx = 0; newIdx < allDays.length; newIdx++) {
+          final oldDay = allDays[newIdx];
+          final exForDay = existing.exercises.where((e) => e.dayOfWeek == oldDay).toList();
+          _dayExercises[newIdx] = exForDay.map((e) => e.copyWith(dayOfWeek: newIdx)).toList();
+        }
+
+        final nullDayEx = existing.exercises.where((e) => e.dayOfWeek == null).toList();
+        if (nullDayEx.isNotEmpty) {
+          _dayExercises[0]!.addAll(nullDayEx.map((e) => e.copyWith(dayOfWeek: 0)));
+        }
       }
+      _currentDayIndex = 0;
+    } else {
+      _days = [0, 1, 2]; // Default 3 dynamic days: Day 1, Day 2, Day 3
+      _dayExercises = {for (int i = 0; i < 3; i++) i: <PlanExercise>[]};
+      _currentDayIndex = 0;
     }
   }
 
@@ -71,26 +89,74 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
     });
   }
 
-  void _toggleCurrentDay() {
+  void _addNewDay() {
     setState(() {
-      if (_selectedDays.contains(_currentDayIndex)) {
-        _selectedDays.remove(_currentDayIndex);
-      } else {
-        _selectedDays.add(_currentDayIndex);
-        _selectedDays.sort();
+      final newIndex = _days.length;
+      _days.add(newIndex);
+      _dayExercises[newIndex] = <PlanExercise>[];
+      _currentDayIndex = newIndex;
+    });
+  }
+
+  void _deleteDay(int dayIndex) {
+    if (_days.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A plan must have at least one day.')),
+      );
+      return;
+    }
+
+    final exCount = _dayExercises[dayIndex]?.length ?? 0;
+    if (exCount > 0) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Delete Day ${dayIndex + 1}?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Text(
+            'This day has $exCount configured ${exCount == 1 ? 'exercise' : 'exercises'}. Are you sure you want to delete Day ${dayIndex + 1}?',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _performDeleteDay(dayIndex);
+              },
+              child: const Text('Delete', style: TextStyle(color: AppColors.accentRose, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _performDeleteDay(dayIndex);
+    }
+  }
+
+  void _performDeleteDay(int dayIndex) {
+    setState(() {
+      final remainingDayExercises = <int, List<PlanExercise>>{};
+      var newIdx = 0;
+      for (var i = 0; i < _days.length; i++) {
+        if (i == dayIndex) continue;
+        final list = _dayExercises[i] ?? [];
+        remainingDayExercises[newIdx] = list.map((e) => e.copyWith(dayOfWeek: newIdx)).toList();
+        newIdx++;
+      }
+      _days = List.generate(newIdx, (i) => i);
+      _dayExercises = remainingDayExercises;
+      if (_currentDayIndex >= _days.length) {
+        _currentDayIndex = _days.length - 1;
       }
     });
   }
 
   Future<void> _openAddExercise() async {
-    // If current day is not in selectedDays, automatically activate it as a training day
-    if (!_selectedDays.contains(_currentDayIndex)) {
-      setState(() {
-        _selectedDays.add(_currentDayIndex);
-        _selectedDays.sort();
-      });
-    }
-
     final selectedExercise = await Navigator.of(context).push<Exercise>(
       MaterialPageRoute(
         builder: (_) => const ExerciseLibraryScreen(isPickerMode: true),
@@ -136,7 +202,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
   }
 
   void _showCopyFromDialog() {
-    final availableDays = _selectedDays
+    final availableDays = _days
         .where((d) => d != _currentDayIndex && (_dayExercises[d]?.isNotEmpty ?? false))
         .toList();
     if (availableDays.isEmpty) {
@@ -161,7 +227,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Copy exercises to ${_dayFullNames[_currentDayIndex]} from:',
+                  'Copy exercises to Day ${_currentDayIndex + 1} from:',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 12),
@@ -169,7 +235,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                   final exCount = _dayExercises[d]?.length ?? 0;
                   return ListTile(
                     leading: const Icon(Icons.copy_rounded, color: AppColors.primaryLight),
-                    title: Text('${_dayFullNames[d]} ($exCount exercises)', style: const TextStyle(color: Colors.white)),
+                    title: Text('Day ${d + 1} ($exCount ${exCount == 1 ? 'exercise' : 'exercises'})', style: const TextStyle(color: Colors.white)),
                     onTap: () {
                       Navigator.pop(context);
                       final sourceList = _dayExercises[d] ?? [];
@@ -178,10 +244,6 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                         dayOfWeek: _currentDayIndex,
                       )).toList();
                       setState(() {
-                        if (!_selectedDays.contains(_currentDayIndex)) {
-                          _selectedDays.add(_currentDayIndex);
-                          _selectedDays.sort();
-                        }
                         _dayExercises[_currentDayIndex] = [
                           ...(_dayExercises[_currentDayIndex] ?? []),
                           ...copied,
@@ -208,9 +270,9 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
       return;
     }
 
-    if (_selectedDays.isEmpty) {
+    if (_days.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one workout day')),
+        const SnackBar(content: Text('Please add at least one workout day')),
       );
       return;
     }
@@ -219,7 +281,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
     final now = DateTime.now();
 
     final allExercises = <PlanExercise>[];
-    for (final day in _selectedDays) {
+    for (final day in _days) {
       final dayList = _dayExercises[day] ?? [];
       for (var i = 0; i < dayList.length; i++) {
         allExercises.add(dayList[i].copyWith(
@@ -237,8 +299,13 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
       colorIndex: widget.existingPlan?.colorIndex ?? 0,
       createdAt: widget.existingPlan?.createdAt ?? now,
       updatedAt: now,
-      daysOfWeek: _selectedDays,
+      daysOfWeek: List<int>.from(_days),
       exercises: allExercises,
+      isRotating: _isRotating,
+      currentSplitIndex: widget.existingPlan?.currentSplitIndex ?? 0,
+      leaveDates: widget.existingPlan?.leaveDates ?? const [],
+      lastCompletedDate: widget.existingPlan?.lastCompletedDate,
+      lastCompletedSplitIndex: widget.existingPlan?.lastCompletedSplitIndex,
     );
 
     await ref.read(workoutPlansProvider.notifier).savePlan(plan);
@@ -302,6 +369,51 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                     hint: 'Brief description...',
                     maxLines: 2,
                   ),
+                  const SizedBox(height: 20),
+
+                  // Split Mode Card
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderGlass),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.sync_rounded, color: AppColors.primaryLight, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Continuous Rotating Split',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Rotates Day 1 → Day N continuously without calendar week resets. Leave & missed days pause the sequence.',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: _isRotating,
+                          activeTrackColor: AppColors.primaryLight,
+                          onChanged: (val) => setState(() => _isRotating = val),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // Workout Days Section
@@ -317,7 +429,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                         ),
                       ),
                       Text(
-                        '${_selectedDays.length} selected',
+                        '${_days.length} ${_days.length == 1 ? 'Day' : 'Days'} configured',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -327,77 +439,119 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(7, (i) {
-                      final isCurrent = _currentDayIndex == i;
-                      final isTrainingDay = _selectedDays.contains(i);
-                      final count = _dayExercises[i]?.length ?? 0;
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ..._days.map((i) {
+                          final isCurrent = _currentDayIndex == i;
+                          final count = _dayExercises[i]?.length ?? 0;
 
-                      return GestureDetector(
-                        onTap: () => _onDayTapped(i),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: 44,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: isCurrent
-                                ? AppColors.primary.withValues(alpha: 0.25)
-                                : (isTrainingDay ? AppColors.surfaceGlass : Colors.transparent),
-                            border: Border.all(
-                              color: isCurrent
-                                  ? AppColors.primaryLight
-                                  : (isTrainingDay ? AppColors.borderGlass : Colors.white.withValues(alpha: 0.08)),
-                              width: isCurrent ? 2.0 : 1.0,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                _dayNames[i],
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: isCurrent ? FontWeight.w700 : (isTrainingDay ? FontWeight.w600 : FontWeight.w500),
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () => _onDayTapped(i),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 72,
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
                                   color: isCurrent
-                                      ? Colors.white
-                                      : (isTrainingDay ? AppColors.textPrimary : AppColors.textMuted),
+                                      ? AppColors.primary.withValues(alpha: 0.25)
+                                      : AppColors.surfaceGlass,
+                                  border: Border.all(
+                                    color: isCurrent
+                                        ? AppColors.primaryLight
+                                        : AppColors.borderGlass,
+                                    width: isCurrent ? 2.0 : 1.0,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Day ${i + 1}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                                        color: isCurrent
+                                            ? Colors.white
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    if (count > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryLight.withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '$count ex',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primaryLight,
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      Text(
+                                        '0 ex',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.textMuted.withValues(alpha: 0.6),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              if (isTrainingDay)
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: count > 0 ? AppColors.primaryLight : AppColors.accentGreen,
-                                  ),
-                                )
-                              else
+                            ),
+                          );
+                        }),
+                        InkWell(
+                          onTap: _addNewDay,
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            width: 72,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              color: AppColors.surfaceGlass,
+                              border: Border.all(
+                                color: AppColors.primaryLight.withValues(alpha: 0.4),
+                                width: 1.0,
+                              ),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_rounded, size: 20, color: AppColors.primaryLight),
+                                SizedBox(height: 2),
                                 Text(
-                                  '—',
+                                  'Add Day',
                                   style: TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.textMuted.withValues(alpha: 0.5),
-                                    height: 0.8,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryLight,
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      );
-                    }),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 14),
 
                   // Day status banner
                   Builder(
                     builder: (context) {
-                      final isTrainingDay = _selectedDays.contains(_currentDayIndex);
                       final currentExercises = _dayExercises[_currentDayIndex] ?? [];
-                      final hasOtherDaysWithExercises = _selectedDays.any(
+                      final hasOtherDaysWithExercises = _days.any(
                         (d) => d != _currentDayIndex && (_dayExercises[d]?.isNotEmpty ?? false),
                       );
 
@@ -415,7 +569,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _dayFullNames[_currentDayIndex],
+                                    'Day ${_currentDayIndex + 1}',
                                     style: const TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
@@ -424,18 +578,18 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    isTrainingDay
+                                    currentExercises.isNotEmpty
                                         ? '${currentExercises.length} ${currentExercises.length == 1 ? 'exercise' : 'exercises'} configured'
-                                        : 'Rest Day (no workouts scheduled)',
+                                        : 'No exercises added yet',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: isTrainingDay ? AppColors.accentGreen : AppColors.textMuted,
+                                      color: currentExercises.isNotEmpty ? AppColors.accentGreen : AppColors.textMuted,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            if (hasOtherDaysWithExercises && isTrainingDay) ...[
+                            if (hasOtherDaysWithExercises) ...[
                               IconButton(
                                 tooltip: 'Copy from another day',
                                 onPressed: _showCopyFromDialog,
@@ -445,43 +599,14 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                               ),
                               const SizedBox(width: 8),
                             ],
-                            InkWell(
-                              onTap: _toggleCurrentDay,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isTrainingDay
-                                      ? AppColors.primary.withValues(alpha: 0.15)
-                                      : AppColors.surfaceGlass,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isTrainingDay
-                                        ? AppColors.primaryLight.withValues(alpha: 0.4)
-                                        : AppColors.borderGlass,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isTrainingDay ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
-                                      size: 14,
-                                      color: isTrainingDay ? AppColors.primaryLight : AppColors.textMuted,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isTrainingDay ? 'Training Day' : 'Rest Day',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: isTrainingDay ? AppColors.primaryLight : AppColors.textMuted,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            if (_days.length > 1)
+                              IconButton(
+                                tooltip: 'Delete Day ${_currentDayIndex + 1}',
+                                onPressed: () => _deleteDay(_currentDayIndex),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.accentRose),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                               ),
-                            ),
                           ],
                         ),
                       );
@@ -492,7 +617,6 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                   // Exercises Section Header
                   Builder(
                     builder: (context) {
-                      final isTrainingDay = _selectedDays.contains(_currentDayIndex);
                       final currentExercises = _dayExercises[_currentDayIndex] ?? [];
 
                       return Row(
@@ -500,7 +624,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                         children: [
                           Expanded(
                             child: Text(
-                              '${_dayFullNames[_currentDayIndex]} Exercises (${currentExercises.length})',
+                              'Day ${_currentDayIndex + 1} Exercises (${currentExercises.length})',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
@@ -511,37 +635,36 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                             ),
                           ),
                           const SizedBox(width: 8),
-                          if (isTrainingDay)
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: _openAddExercise,
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.add_rounded, size: 16, color: AppColors.primaryLight),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Add Exercise',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.primaryLight,
-                                        ),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: _openAddExercise,
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.add_rounded, size: 16, color: AppColors.primaryLight),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Add Exercise',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryLight,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       );
                     },
@@ -551,53 +674,7 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                   // Exercises Content
                   Builder(
                     builder: (context) {
-                      final isTrainingDay = _selectedDays.contains(_currentDayIndex);
                       final currentExercises = _dayExercises[_currentDayIndex] ?? [];
-
-                      if (!isTrainingDay) {
-                        return GlassCard(
-                          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.surfaceGlass,
-                                  border: Border.all(color: AppColors.borderGlass),
-                                ),
-                                child: const Icon(Icons.bed_rounded, size: 36, color: AppColors.textMuted),
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                '${_dayFullNames[_currentDayIndex]} is a Rest Day',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'Take time to recover, or make it a training day to add exercises.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              GlassButton(
-                                label: 'Make Training Day',
-                                icon: Icons.fitness_center_rounded,
-                                variant: GlassButtonVariant.primary,
-                                height: 42,
-                                onPressed: _toggleCurrentDay,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
 
                       if (currentExercises.isEmpty) {
                         return GlassCard(
@@ -607,28 +684,31 @@ class _CreateWorkoutPlanScreenState extends ConsumerState<CreateWorkoutPlanScree
                               const Icon(Icons.fitness_center_rounded, size: 36, color: AppColors.textMuted),
                               const SizedBox(height: 10),
                               Text(
-                                'No exercises configured for ${_dayFullNames[_currentDayIndex]}',
+                                'No exercises configured for Day ${_currentDayIndex + 1}',
                                 style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white70),
                               ),
                               const SizedBox(height: 14),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  GlassButton(
-                                    label: 'Add Exercise',
-                                    icon: Icons.add_rounded,
-                                    variant: GlassButtonVariant.secondary,
-                                    height: 40,
-                                    onPressed: _openAddExercise,
+                                  Expanded(
+                                    child: GlassButton(
+                                      label: 'Add Exercise',
+                                      icon: Icons.add_rounded,
+                                      variant: GlassButtonVariant.secondary,
+                                      height: 42,
+                                      onPressed: _openAddExercise,
+                                    ),
                                   ),
-                                  if (_selectedDays.any((d) => d != _currentDayIndex && (_dayExercises[d]?.isNotEmpty ?? false))) ...[
+                                  if (_days.any((d) => d != _currentDayIndex && (_dayExercises[d]?.isNotEmpty ?? false))) ...[
                                     const SizedBox(width: 12),
-                                    GlassButton(
-                                      label: 'Copy from Day',
-                                      icon: Icons.copy_rounded,
-                                      variant: GlassButtonVariant.ghost,
-                                      height: 40,
-                                      onPressed: _showCopyFromDialog,
+                                    Expanded(
+                                      child: GlassButton(
+                                        label: 'Copy from Day',
+                                        icon: Icons.copy_rounded,
+                                        variant: GlassButtonVariant.ghost,
+                                        height: 42,
+                                        onPressed: _showCopyFromDialog,
+                                      ),
                                     ),
                                   ],
                                 ],

@@ -77,6 +77,11 @@ workoutPlansRouter.post('/', async (req: Request, res: Response) => {
         color_index: data.color_index ?? 0,
         days_of_week: data.days_of_week || [],
         exercises,
+        is_rotating: data.is_rotating ?? true,
+        current_split_index: data.current_split_index ?? 0,
+        leave_dates: Array.isArray(data.leave_dates) ? data.leave_dates : [],
+        last_completed_date: data.last_completed_date ? new Date(data.last_completed_date) : null,
+        last_completed_split_index: data.last_completed_split_index ?? null,
         created_at: data.created_at ? new Date(data.created_at) : now,
         updated_at: now,
       },
@@ -114,18 +119,30 @@ workoutPlansRouter.put('/:id', async (req: Request, res: Response) => {
       rest_seconds: e.rest_seconds ?? 60,
     }));
 
+    const updateData: Record<string, any> = {
+      id: planId,
+      userId: req.userId,
+      name: data.name,
+      description: data.description,
+      color_index: data.color_index,
+      days_of_week: data.days_of_week,
+      exercises,
+      updated_at: now,
+    };
+
+    if (data.is_rotating !== undefined) updateData.is_rotating = data.is_rotating;
+    if (data.current_split_index !== undefined) updateData.current_split_index = data.current_split_index;
+    if (data.leave_dates !== undefined) updateData.leave_dates = data.leave_dates;
+    if (data.last_completed_date !== undefined) {
+      updateData.last_completed_date = data.last_completed_date ? new Date(data.last_completed_date) : null;
+    }
+    if (data.last_completed_split_index !== undefined) {
+      updateData.last_completed_split_index = data.last_completed_split_index;
+    }
+
     const plan = await WorkoutPlan.findOneAndUpdate(
       { id: planId, userId: req.userId },
-      {
-        id: planId,
-        userId: req.userId,
-        name: data.name,
-        description: data.description,
-        color_index: data.color_index,
-        days_of_week: data.days_of_week,
-        exercises,
-        updated_at: now,
-      },
+      updateData,
       { new: true, upsert: true }
     );
 
@@ -174,6 +191,11 @@ workoutPlansRouter.post('/:id/duplicate', async (req: Request, res: Response) =>
       color_index: (original.color_index + 1) % 4,
       days_of_week: [...original.days_of_week],
       exercises: newExercises,
+      is_rotating: original.is_rotating ?? true,
+      current_split_index: 0,
+      leave_dates: [],
+      last_completed_date: null,
+      last_completed_split_index: null,
       created_at: now,
       updated_at: now,
     });
@@ -182,5 +204,62 @@ workoutPlansRouter.post('/:id/duplicate', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Duplicate plan error:', error);
     res.status(500).json({ error: 'Failed to duplicate workout plan.' });
+  }
+});
+
+// POST /api/workout-plans/:id/leave
+workoutPlansRouter.post('/:id/leave', async (req: Request, res: Response) => {
+  try {
+    const { date, action } = req.body;
+    if (!date || typeof date !== 'string') {
+      return res.status(400).json({ error: 'Date string (YYYY-MM-DD) is required.' });
+    }
+
+    const plan = await WorkoutPlan.findOne({ id: req.params.id, userId: req.userId });
+    if (!plan) {
+      return res.status(404).json({ error: 'Workout plan not found.' });
+    }
+
+    const currentLeaves = new Set(plan.leave_dates || []);
+    if (action === 'cancel') {
+      currentLeaves.delete(date);
+    } else {
+      currentLeaves.add(date);
+    }
+
+    plan.leave_dates = Array.from(currentLeaves).sort();
+    plan.updated_at = new Date();
+    await plan.save();
+
+    res.json(plan.toJSON());
+  } catch (error) {
+    console.error('Leave action error:', error);
+    res.status(500).json({ error: 'Failed to update leave for workout plan.' });
+  }
+});
+
+// POST /api/workout-plans/:id/advance-split
+workoutPlansRouter.post('/:id/advance-split', async (req: Request, res: Response) => {
+  try {
+    const { completed_split_index, completed_date } = req.body;
+    const plan = await WorkoutPlan.findOne({ id: req.params.id, userId: req.userId });
+    if (!plan) {
+      return res.status(404).json({ error: 'Workout plan not found.' });
+    }
+
+    const totalDays = plan.days_of_week && plan.days_of_week.length > 0 ? plan.days_of_week.length : 1;
+    const baseIndex = typeof completed_split_index === 'number' ? completed_split_index : plan.current_split_index;
+    const nextIndex = (baseIndex + 1) % totalDays;
+
+    plan.current_split_index = nextIndex;
+    plan.last_completed_split_index = typeof completed_split_index === 'number' ? completed_split_index : baseIndex;
+    plan.last_completed_date = completed_date ? new Date(completed_date) : new Date();
+    plan.updated_at = new Date();
+    await plan.save();
+
+    res.json(plan.toJSON());
+  } catch (error) {
+    console.error('Advance split error:', error);
+    res.status(500).json({ error: 'Failed to advance workout split.' });
   }
 });

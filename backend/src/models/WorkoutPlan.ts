@@ -25,6 +25,11 @@ export interface IWorkoutPlan extends Document {
   color_index: number;
   days_of_week: number[];
   exercises: IPlanExercise[];
+  is_rotating: boolean;
+  current_split_index: number;
+  leave_dates: string[];
+  last_completed_date?: Date | null;
+  last_completed_split_index?: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -58,6 +63,11 @@ const WorkoutPlanSchema: Schema = new Schema(
     color_index: { type: Number, default: 0 },
     days_of_week: { type: [Number], default: [] },
     exercises: { type: [PlanExerciseSchema], default: [] },
+    is_rotating: { type: Boolean, default: true },
+    current_split_index: { type: Number, default: 0 },
+    leave_dates: { type: [String], default: [] },
+    last_completed_date: { type: Date, default: null },
+    last_completed_split_index: { type: Number, default: null },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
   },
