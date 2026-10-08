@@ -84,17 +84,6 @@ class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
     }
   }
 
-  Future<void> loginWithGoogle(String idToken) async {
-    state = const AsyncLoading();
-    try {
-      final user = await ref.read(authServiceProvider).loginWithGoogle(idToken);
-      state = AsyncData(user);
-    } catch (e, st) {
-      state = AsyncError(e, st);
-      rethrow;
-    }
-  }
-
   Future<void> logout() async {
     await ref.read(authServiceProvider).logout();
     state = const AsyncData(null);
@@ -193,6 +182,32 @@ class WorkoutPlansNotifier extends AsyncNotifier<List<WorkoutPlan>> {
   Future<void> duplicatePlan(String id) async {
     await ref.read(planRepoProvider).duplicatePlan(id);
     ref.invalidateSelf();
+  }
+
+  Future<void> recordLeave(String planId, DateTime date) async {
+    await ref.read(planRepoProvider).recordLeave(planId, date);
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
+  }
+
+  Future<void> cancelLeave(String planId, DateTime date) async {
+    await ref.read(planRepoProvider).cancelLeave(planId, date);
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
+  }
+
+  Future<void> advancePlanSplit(
+    String planId, {
+    int? completedSplitIndex,
+    DateTime? completedDate,
+  }) async {
+    await ref.read(planRepoProvider).advancePlanSplit(
+          planId,
+          completedSplitIndex: completedSplitIndex,
+          completedDate: completedDate,
+        );
+    ref.invalidateSelf();
+    ref.invalidate(todayPlanProvider);
   }
 }
 

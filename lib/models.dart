@@ -83,7 +83,7 @@ class SetLog {
   final int duration;
   final double distance;
 
-  double get volume => weight * reps;
+  double get volume => (completed && weight > 0 && reps > 0) ? (weight * reps) : 0.0;
 
   Map<String, dynamic> toJson() => {
         'reps': reps,

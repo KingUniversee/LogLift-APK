@@ -10,7 +10,7 @@ export const authRouter = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'liftlog_super_secure_jwt_secret_key_2026_x92';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'liftlog_super_secure_jwt_refresh_secret_key_2026_k83';
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '920575978481-a1o52s4mkkoep0te6a8jnho2ves5iqos.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '920575978481-6ss9gbv10qu2dlo4888fcu0nu75iktv5.apps.googleusercontent.com';
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -171,13 +171,6 @@ authRouter.post('/google', async (req: Request, res: Response) => {
     console.error('Google Auth error:', error);
     res.status(500).json({ error: 'Failed to authenticate with Google.' });
   }
-});
-
-// POST /api/auth/apple
-authRouter.post('/apple', (req: Request, res: Response) => {
-  res.status(501).json({
-    message: 'Apple Sign In is scheduled for a future update.',
-  });
 });
 
 // GET /api/auth/me

@@ -273,12 +273,209 @@ class HomeScreen extends ConsumerWidget {
       );
     }
 
-    final totalSets = plan.exercises.fold<int>(0, (sum, e) => sum + e.targetSets);
+    final today = DateTime.now();
+    final effectiveDayIndex = plan.getEffectiveSplitIndexForDate(today);
+    final isLeave = plan.isLeaveForDate(today);
+    final isOff = plan.isOffDay(effectiveDayIndex);
+    final todayExercises = plan.getExercisesForDay(effectiveDayIndex);
+    final totalSets = todayExercises.fold<int>(0, (sum, e) => sum + e.targetSets);
+    final estDuration = plan.estimatedDurationMinutesForDay(effectiveDayIndex);
 
+    // 1. LEAVE DAY STATE
+    if (isLeave) {
+      return GlassCard(
+        padding: const EdgeInsets.all(22),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.accentAmber.withValues(alpha: 0.18),
+            AppColors.surfaceGlass,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderColor: AppColors.accentAmber.withValues(alpha: 0.4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentAmber.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.beach_access_rounded, size: 14, color: AppColors.accentAmber),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  "LEAVE DAY · ROUTINE PAUSED",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: AppColors.accentAmber,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              plan.name,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Routine paused at Day ${effectiveDayIndex + 1} (${todayExercises.length} ${todayExercises.length == 1 ? 'exercise' : 'exercises'}). Your pending workout will resume next session.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.3),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: AppColors.accentAmber.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      foregroundColor: AppColors.accentAmber,
+                    ),
+                    icon: const Icon(Icons.undo_rounded, size: 18),
+                    label: const Text('Cancel Leave', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    onPressed: () async {
+                      await ref.read(workoutPlansProvider.notifier).cancelLeave(plan.id, today);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GlassButton(
+                    label: 'Start Anyway',
+                    icon: Icons.play_arrow_rounded,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StartWorkoutScreen(plan: plan, initialDayIndex: effectiveDayIndex),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2. REST / OFF DAY STATE
+    if (isOff) {
+      final nextDayNum = ((effectiveDayIndex + 1) % (plan.daysOfWeek.isNotEmpty ? plan.daysOfWeek.length : 1)) + 1;
+      return GlassCard(
+        padding: const EdgeInsets.all(22),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.accentCyan.withValues(alpha: 0.16),
+            AppColors.surfaceGlass,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderColor: AppColors.accentCyan.withValues(alpha: 0.4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentCyan.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.spa_rounded, size: 14, color: AppColors.accentCyan),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  plan.isRotating ? "REST DAY · DAY ${effectiveDayIndex + 1} (OFF IN ROUTINE)" : "REST DAY",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: AppColors.accentCyan,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '${plan.name} · Recovery',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Scheduled rest in your routine. Muscle recovery prepares you for Day $nextDayNum.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.3),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: AppColors.accentAmber.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      foregroundColor: AppColors.accentAmber,
+                    ),
+                    icon: const Icon(Icons.beach_access_rounded, size: 18),
+                    label: const Text('Take Leave', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    onPressed: () => _confirmTakeLeave(context, ref, plan, effectiveDayIndex),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GlassButton(
+                    label: 'Mark Rest Done',
+                    icon: Icons.check_circle_outline_rounded,
+                    onPressed: () async {
+                      await ref.read(workoutPlansProvider.notifier).advancePlanSplit(
+                            plan.id,
+                            completedSplitIndex: effectiveDayIndex,
+                            completedDate: today,
+                          );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3. REGULAR WORKOUT DAY STATE
     return GlassCard(
       padding: const EdgeInsets.all(22),
       gradient: AppColors.heroCardGradient,
       borderColor: AppColors.borderGlassHighlight,
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => StartWorkoutScreen(plan: plan, initialDayIndex: effectiveDayIndex),
+          ),
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -296,9 +493,11 @@ class HomeScreen extends ConsumerWidget {
                     child: const Icon(Icons.fitness_center_rounded, size: 14, color: AppColors.primaryLight),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    "TODAY'S WORKOUT",
-                    style: TextStyle(
+                  Text(
+                    plan.isRotating
+                        ? "TODAY'S WORKOUT · DAY ${effectiveDayIndex + 1} OF ${plan.daysOfWeek.length}"
+                        : "TODAY'S WORKOUT",
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.2,
@@ -334,23 +533,102 @@ class HomeScreen extends ConsumerWidget {
           // 3 Metrics Pill Row
           Row(
             children: [
-              _metricPill(context, Icons.format_list_numbered_rounded, '${plan.exercises.length}', 'Exercises'),
+              _metricPill(context, Icons.format_list_numbered_rounded, '${todayExercises.length}', 'Exercises'),
               const SizedBox(width: 10),
               _metricPill(context, Icons.layers_outlined, '$totalSets', 'Sets'),
               const SizedBox(width: 10),
-              _metricPill(context, Icons.timer_outlined, '${plan.estimatedDurationMinutes}m', 'Duration'),
+              _metricPill(context, Icons.timer_outlined, '${estDuration}m', 'Duration'),
             ],
           ),
           const SizedBox(height: 22),
 
-          GlassButton(
-            label: 'Start Workout',
-            icon: Icons.play_arrow_rounded,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => StartWorkoutScreen(plan: plan)),
-              );
+          Row(
+            children: [
+              Expanded(
+                child: GlassButton(
+                  label: 'Start Workout',
+                  icon: Icons.play_arrow_rounded,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StartWorkoutScreen(plan: plan, initialDayIndex: effectiveDayIndex),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Tooltip(
+                message: 'Take leave for today',
+                child: InkWell(
+                  onTap: () => _confirmTakeLeave(context, ref, plan, effectiveDayIndex),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentAmber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.accentAmber.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.beach_access_rounded, color: AppColors.accentAmber, size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'Leave',
+                          style: TextStyle(
+                            color: AppColors.accentAmber,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmTakeLeave(BuildContext context, WidgetRef ref, WorkoutPlan plan, int dayIndex) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.beach_access_rounded, color: AppColors.accentAmber, size: 24),
+            SizedBox(width: 10),
+            Text('Take Leave Today?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Taking leave will pause your routine sequence for today. Day ${dayIndex + 1} will remain waiting and will resume next time you work out.',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accentAmber,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(workoutPlansProvider.notifier).recordLeave(plan.id, DateTime.now());
             },
+            child: const Text('Confirm Leave', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

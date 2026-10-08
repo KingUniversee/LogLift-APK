@@ -16,16 +16,30 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+class _MainShellState extends ConsumerState<MainShell> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Check for any active session to resume
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(activeWorkoutProvider.notifier).checkResumeInterruptedWorkout();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(activeWorkoutProvider.notifier).syncOnResume();
+    }
   }
 
   void _onTabSelected(int index) {

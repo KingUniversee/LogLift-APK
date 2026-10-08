@@ -43,18 +43,38 @@ class ExerciseDetailsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => CreateExerciseScreen(existingExercise: exercise)),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.accentRose),
-            onPressed: () => _confirmDelete(context, ref),
-          ),
+          if (exercise.isCustom) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => CreateExerciseScreen(existingExercise: exercise)),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.accentRose),
+              onPressed: () => _confirmDelete(context, ref),
+            ),
+          ] else ...[
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.textMuted),
+                  SizedBox(width: 4),
+                  Text('Standard', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
       body: Stack(
@@ -108,6 +128,7 @@ class ExerciseDetailsScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    _tag(exercise.isCustom ? 'Custom' : 'Standard System', exercise.isCustom ? AppColors.accentGreen : AppColors.textMuted),
                     _tag(exercise.muscleGroup.displayName, AppColors.primary),
                     _tag(exercise.equipment, AppColors.accentPurple),
                     _tag(exercise.exerciseType.displayName, AppColors.accentCyan),

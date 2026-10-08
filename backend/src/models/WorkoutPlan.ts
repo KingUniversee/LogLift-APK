@@ -8,10 +8,12 @@ export interface IPlanExercise {
   exercise_muscle: string;
   exercise_type: string;
   sort_order: number;
+  day_of_week?: number | null;
   target_sets: number;
   target_reps: number;
   target_weight: number;
   target_duration_seconds: number;
+  target_distance_km?: number;
   rest_seconds: number;
 }
 
@@ -23,6 +25,11 @@ export interface IWorkoutPlan extends Document {
   color_index: number;
   days_of_week: number[];
   exercises: IPlanExercise[];
+  is_rotating: boolean;
+  current_split_index: number;
+  leave_dates: string[];
+  last_completed_date?: Date | null;
+  last_completed_split_index?: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -36,10 +43,12 @@ const PlanExerciseSchema = new Schema(
     exercise_muscle: { type: String, default: 'fullBody' },
     exercise_type: { type: String, default: 'strength' },
     sort_order: { type: Number, default: 0 },
+    day_of_week: { type: Number, required: false, default: null },
     target_sets: { type: Number, default: 3 },
     target_reps: { type: Number, default: 10 },
     target_weight: { type: Number, default: 0 },
     target_duration_seconds: { type: Number, default: 0 },
+    target_distance_km: { type: Number, default: 0 },
     rest_seconds: { type: Number, default: 60 },
   },
   { _id: false }
@@ -54,6 +63,11 @@ const WorkoutPlanSchema: Schema = new Schema(
     color_index: { type: Number, default: 0 },
     days_of_week: { type: [Number], default: [] },
     exercises: { type: [PlanExerciseSchema], default: [] },
+    is_rotating: { type: Boolean, default: true },
+    current_split_index: { type: Number, default: 0 },
+    leave_dates: { type: [String], default: [] },
+    last_completed_date: { type: Date, default: null },
+    last_completed_split_index: { type: Number, default: null },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
   },

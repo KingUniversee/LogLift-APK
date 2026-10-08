@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../../core/network/api_client.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
@@ -22,6 +23,21 @@ class UserProfileRepository {
         'avatar_url': profile.avatarUrl,
         'fitness_goal': profile.fitnessGoal,
       },
+    );
+  }
+
+  Future<String> uploadAvatar(File file) async {
+    final response = await _api.uploadMultipart(
+      '/users/avatar',
+      file: file,
+      fieldName: 'avatar',
+    );
+    if (response is Map<String, dynamic> && response['avatar_url'] != null) {
+      return response['avatar_url'] as String;
+    }
+    throw const ApiException(
+      message: 'Failed to upload avatar: invalid server response',
+      statusCode: 500,
     );
   }
 }
